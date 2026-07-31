@@ -14,6 +14,9 @@ if [[ ! -x "${APP_ROOT}/.venv/bin/python" ]]; then
   echo "Venv Manifold belum tersedia; audit runtime/dependency sebelum instalasi." >&2
   exit 3
 fi
+"${SOURCE_ROOT}/scripts/check_disk_space.sh" \
+  --path "${APP_ROOT}" --min-mib "${GAP_PLOT_AI_ENGINE_MIN_FREE_MIB:-1024}" \
+  --operation "TensorRT engine build"
 
 export GAP_PLOT_AI_APP_ROOT="${APP_ROOT}"
 export PLOT_GAP_ROOT="${PLOT_GAP_ROOT:-${APP_ROOT}}"

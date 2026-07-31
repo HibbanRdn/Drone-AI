@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import signal
 from pathlib import Path
+from typing import Optional
 
 import cv2
 
@@ -43,7 +44,7 @@ def run(args: argparse.Namespace) -> Path:
 
     previous_sigint = signal.signal(signal.SIGINT, _stop)
     previous_sigterm = signal.signal(signal.SIGTERM, _stop)
-    preview_writer: cv2.VideoWriter | None = None
+    preview_writer: Optional[cv2.VideoWriter] = None
     processed = 0
     source_index = args.start_frame
     try:

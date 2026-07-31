@@ -7,6 +7,7 @@ import re
 import stat
 import tempfile
 from pathlib import Path
+from typing import Dict
 
 
 PORTAL_REQUIRED = (
@@ -35,13 +36,13 @@ class CredentialError(ValueError):
     pass
 
 
-def read_env(path: Path) -> dict[str, str]:
+def read_env(path: Path) -> Dict[str, str]:
     if not path.is_file():
         raise CredentialError(f"credential file not found: {path}")
     permissions = stat.S_IMODE(path.stat().st_mode)
     if permissions & 0o077:
         raise CredentialError("credential file permissions must be 600")
-    values: dict[str, str] = {}
+    values: Dict[str, str] = {}
     for line_number, raw_line in enumerate(
         path.read_text(encoding="utf-8").splitlines(), start=1
     ):
@@ -57,7 +58,7 @@ def read_env(path: Path) -> dict[str, str]:
     return values
 
 
-def validate(values: dict[str, str], *, require_runtime: bool) -> None:
+def validate(values: Dict[str, str], *, require_runtime: bool) -> None:
     required = RUNTIME_REQUIRED if require_runtime else PORTAL_REQUIRED
     for key in required:
         if not values.get(key):
@@ -88,7 +89,7 @@ def validate(values: dict[str, str], *, require_runtime: bool) -> None:
         raise CredentialError("DJI_BAUD_RATE must contain digits only")
 
 
-def print_redacted_status(values: dict[str, str]) -> None:
+def print_redacted_status(values: Dict[str, str]) -> None:
     print(f"app_id_configured={str(bool(values.get('DJI_APP_ID'))).lower()}")
     print(f"app_key_configured={str(bool(values.get('DJI_APP_KEY'))).lower()}")
     print(
@@ -101,7 +102,7 @@ def c_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def generate_header(values: dict[str, str], output: Path) -> None:
+def generate_header(values: Dict[str, str], output: Path) -> None:
     macros = (
         ("USER_APP_NAME", "DJI_APP_NAME"),
         ("USER_APP_ID", "DJI_APP_ID"),

@@ -4,7 +4,7 @@ Status 31 Juli 2026:
 
 - `local_ready`: ya
 - `model_export_ready`: ya
-- `hardware_blocked`: ya
+- `hardware_inventory_ready`: ya
 - `psdk_blocked`: ya
 - `on_device_validated`: tidak
 - `dpk_ready`: tidak
@@ -65,24 +65,29 @@ VIDEO="/Users/muhamadhibbanramadhan/Movies/New Flight/recut_with_srt/pipeline_in
 Artefak ONNX, report, session, snapshot, log, video preview, weight, dan
 engine berada di path yang di-ignore Git.
 
-## Transfer dan audit Manifold
+## Baseline dan audit Manifold
 
-Jalankan hanya setelah Mac benar-benar mempunyai interface debug
-`192.168.42.x` dan SSH key/config sudah tersedia:
+Inventory read-only aktual mengonfirmasi Ubuntu 20.04.6 aarch64, Python
+3.8.10, GCC 9.4, CMake 3.16.3, CUDA 11.4, cuDNN 8.6, TensorRT 8.5.2, serta
+sekitar 8,7 GiB ruang kosong. `dji_app_ctl` hanya menampilkan aplikasi resmi
+DJI `Smart3DExplore`; `gap_plot_ai` belum terpasang.
+
+Untuk mengulang inventory setelah laptop mempunyai interface debug
+`192.168.42.x`:
 
 ```bash
 export MANIFOLD_SSH_TARGET="dji@192.168.42.120"
-ssh -o BatchMode=yes -o ConnectTimeout=5 "$MANIFOLD_SSH_TARGET" \
-  'bash -s' < manifold_app/scripts/manifold_inventory_readonly.sh
-./manifold_app/scripts/deploy_dev.sh
+mkdir -p runtime/reports
+ssh -o ConnectTimeout=30 "$MANIFOLD_SSH_TARGET" \
+  'bash -s' < scripts/manifold_inventory_readonly.sh \
+  | tee runtime/reports/manifold_inventory_raw.txt
 ```
 
-Jangan instal dependency atau menjalankan `bootstrap_dev.sh` pada Manifold
-sebelum output inventory diperiksa. Versi Python/PyTorch/Ultralytics yang
-dipakai untuk export lokal belum otomatis dianggap cocok dengan JetPack
-aktual. Pembuatan venv dan pemasangan wheel perangkat tetap merupakan gate
-setelah inventory dan persetujuan user; tidak ada command instalasi perangkat
-yang dijalankan atau diasumsikan di tahap ini.
+`bootstrap_dev.sh` adalah bootstrap host Python 3.10–3.12 dan sengaja
+memblokir Linux aarch64. Source runtime mendukung Python 3.8, tetapi wheel
+NumPy/OpenCV/PyTorch/Ultralytics target harus diaudit terhadap aarch64,
+JetPack/L4T, CUDA 11.4, dan TensorRT 8.5.2 sebelum instalasi. Tidak ada
+dependency atau aplikasi yang dipasang pada Manifold dalam audit ini.
 
 Credential portal tersimpan hanya di `config/secrets.env` yang ignored dan
 berizin `600`. `scripts/psdk_credentials.py` memvalidasi ukuran buffer resmi
@@ -122,7 +127,9 @@ tersebut:
 
 ## Build, engine, dan runtime Manifold
 
-TensorRT FP16 hanya dibangun pada Manifold:
+Command berikut adalah langkah nanti setelah dependency target dan gate sample
+resmi lulus; belum dijalankan. TensorRT FP16 hanya dibangun pada Manifold atau
+environment target identik:
 
 ```bash
 export PSDK_ROOT="/path/on/manifold/Payload-SDK-3.16.0"
@@ -134,6 +141,12 @@ export GAP_PLOT_AI_APP_ROOT="/home/dji/gap_plot_ai_dev"
   "/path/to/representative_test.mp4" engine 0 15 30
 "$GAP_PLOT_AI_APP_ROOT/source/scripts/build_manifold.sh"
 ```
+
+Setiap operasi melakukan preflight ruang kosong. Default minimum 1 GiB untuk
+build/export/engine dan 1,5 GiB untuk runtime; dapat dinaikkan melalui variable
+environment yang didokumentasikan script. Build engine memakai TensorRT
+runtime dan tidak mewajibkan `nvcc`. ONNX adalah format pertukaran; engine dari
+macOS, Windows x86, GPU lain, CUDA lain, atau TensorRT lain tidak digunakan.
 
 `deploy_dev.sh` mengecualikan secret dari source archive, lalu mentransfer file
 credential secara terpisah ke `${GAP_PLOT_AI_APP_ROOT}/config/secrets.env`
@@ -155,7 +168,8 @@ direktori IPC sebelum `DjiCore_Init`. Runtime:
 FP16, parity, ground test, dan strategi dependency DPK yang didukung DJI
 lulus. Tidak ada DPK yang dibuat atau diinstal.
 
-Setelah gate DPK benar-benar lulus, command resmi pengelolaan aplikasi adalah:
+Setelah gate DPK benar-benar lulus, command resmi pengelolaan aplikasi adalah
+sebagai referensi operator dan belum dijalankan:
 
 ```bash
 dji_app_ctl install -i /path/to/ggp-drone-ai_v00.01.00.00.dpk

@@ -19,6 +19,9 @@ if [[ ! -x "${NATIVE_BIN}" || ! -x "${PYTHON_BIN}" ]]; then
   echo "Build binary/venv Manifold belum siap." >&2
   exit 3
 fi
+"${SOURCE_ROOT}/scripts/check_disk_space.sh" \
+  --path "${APP_ROOT}" --min-mib "${GAP_PLOT_AI_RUNTIME_MIN_FREE_MIB:-1536}" \
+  --operation "Gap Plot AI runtime"
 
 mkdir -p "${IPC_DIR}" "${PID_DIR}" "${APP_ROOT}/runtime/logs"
 export GAP_PLOT_AI_APP_ROOT="${APP_ROOT}"

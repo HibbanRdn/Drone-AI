@@ -13,6 +13,10 @@ else
   FRAMES=("$@")
 fi
 
+"${APP_ROOT}/scripts/check_disk_space.sh" \
+  --path "${APP_ROOT}" --min-mib "${GAP_PLOT_AI_REPORT_MIN_FREE_MIB:-512}" \
+  --operation "model parity report"
+
 export PLOT_GAP_ROOT="${PROJECT_ROOT}"
 export GAP_PLOT_AI_APP_ROOT="${APP_ROOT}"
 exec "${APP_ROOT}/.venv/bin/gap-plot-ai-parity" \

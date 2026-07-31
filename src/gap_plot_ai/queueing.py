@@ -4,7 +4,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import Deque, Generic, Optional, TypeVar
 
 T = TypeVar("T")
 
@@ -26,7 +26,7 @@ class LatestFrameQueue(Generic[T]):
         if capacity < 1:
             raise ValueError("capacity minimal 1")
         self._capacity = capacity
-        self._items: deque[T] = deque()
+        self._items: Deque[T] = deque()
         self._condition = threading.Condition()
         self._closed = False
         self._pushed = 0
@@ -45,7 +45,7 @@ class LatestFrameQueue(Generic[T]):
             self._condition.notify()
             return True
 
-    def get(self, timeout: float | None = None) -> T | None:
+    def get(self, timeout: Optional[float] = None) -> Optional[T]:
         deadline = None if timeout is None else time.monotonic() + timeout
         with self._condition:
             while not self._items and not self._closed:

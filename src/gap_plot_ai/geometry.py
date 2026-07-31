@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -20,10 +20,10 @@ class LetterboxMeta:
 
 def letterbox(
     image: np.ndarray,
-    target_size: int | tuple[int, int],
-    color: tuple[int, int, int] = (114, 114, 114),
+    target_size: Union[int, Tuple[int, int]],
+    color: Tuple[int, int, int] = (114, 114, 114),
     scale_up: bool = True,
-) -> tuple[np.ndarray, LetterboxMeta]:
+) -> Tuple[np.ndarray, LetterboxMeta]:
     if image.ndim != 3 or image.shape[2] != 3 or image.size == 0:
         raise ValueError("image harus berupa HxWx3 non-empty")
     target_h, target_w = (
@@ -60,7 +60,7 @@ def letterbox(
 
 def preprocess_rgb_chw(
     image_bgr: np.ndarray, target_size: int
-) -> tuple[np.ndarray, LetterboxMeta]:
+) -> Tuple[np.ndarray, LetterboxMeta]:
     padded, meta = letterbox(image_bgr, target_size)
     rgb = cv2.cvtColor(padded, cv2.COLOR_BGR2RGB)
     tensor = np.ascontiguousarray(rgb.transpose(2, 0, 1), dtype=np.float32) / 255.0
@@ -69,7 +69,7 @@ def preprocess_rgb_chw(
 
 def clip_bbox(
     bbox: Iterable[float], width: int, height: int
-) -> tuple[float, float, float, float] | None:
+) -> Optional[Tuple[float, float, float, float]]:
     values = list(bbox)
     if len(values) != 4 or width <= 0 or height <= 0:
         return None
@@ -87,7 +87,7 @@ def clip_bbox(
 
 def reverse_letterbox_bbox(
     bbox: Iterable[float], meta: LetterboxMeta
-) -> tuple[float, float, float, float] | None:
+) -> Optional[Tuple[float, float, float, float]]:
     values = list(bbox)
     if len(values) != 4 or meta.scale <= 0:
         return None
@@ -107,12 +107,12 @@ def mask_to_contours(
     min_area_px: float,
     epsilon_ratio: float,
     max_points: int,
-) -> list[list[list[float]]]:
+) -> List[List[List[float]]]:
     if mask.ndim != 2 or mask.size == 0 or max_points < 3:
         return []
     binary = np.ascontiguousarray(mask > 0, dtype=np.uint8) * 255
     found, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    contours: list[list[list[float]]] = []
+    contours: List[List[List[float]]] = []
     for contour in sorted(found, key=cv2.contourArea, reverse=True):
         if cv2.contourArea(contour) < min_area_px:
             continue
@@ -129,7 +129,7 @@ def mask_to_contours(
 
 
 def rasterize_contours(
-    contours: list[list[list[float]]], width: int, height: int
+    contours: List[List[List[float]]], width: int, height: int
 ) -> np.ndarray:
     output = np.zeros((height, width), dtype=np.uint8)
     polygons = []

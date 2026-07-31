@@ -78,6 +78,7 @@ overlay:
 
 storage:
   max_session_bytes: 1073741824
+  min_free_bytes: 1610612736
   jsonl_rotate_bytes: 83886080
   jsonl_backup_count: 2
   log_rotate_bytes: 10485760

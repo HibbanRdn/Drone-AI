@@ -4,7 +4,7 @@ import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List
 
 import cv2
 import numpy as np
@@ -15,7 +15,7 @@ from .models import UltralyticsModel, select_device
 from .tiling import predict_tiled_detector
 
 
-def _iou(box_a: list[float], box_b: list[float]) -> float:
+def _iou(box_a: List[float], box_b: List[float]) -> float:
     left = max(box_a[0], box_b[0])
     top = max(box_a[1], box_b[1])
     right = min(box_a[2], box_b[2])
@@ -27,7 +27,9 @@ def _iou(box_a: list[float], box_b: list[float]) -> float:
     return intersection / union if union > 0 else 0.0
 
 
-def compare_detector(reference: Any, candidate: Any, tolerance: dict[str, Any]) -> dict[str, Any]:
+def compare_detector(
+    reference: Any, candidate: Any, tolerance: Dict[str, Any]
+) -> Dict[str, Any]:
     reference_remaining = set(range(len(reference.detections)))
     candidate_remaining = set(range(len(candidate.detections)))
     matches = []
@@ -94,7 +96,7 @@ def compare_detector(reference: Any, candidate: Any, tolerance: dict[str, Any]) 
 
 def compare_segmenter(
     reference: Any, candidate: Any, width: int, height: int, minimum_iou: float
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     reference_mask = (
         reference.mask
         if isinstance(reference.mask, np.ndarray)

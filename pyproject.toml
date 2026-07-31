@@ -6,17 +6,21 @@ build-backend = "setuptools.build_meta"
 name = "gap-plot-ai"
 version = "0.1.0"
 description = "Offline-first DJI Manifold 3 inference worker for plant and plot overlays."
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 dependencies = [
+  "PyYAML==6.0.2",
+]
+
+[project.optional-dependencies]
+# Host-only development pins. Manifold dependencies must come from packages
+# compatible with Ubuntu 20.04, Python 3.8, JetPack/L4T, and CUDA 11.4.
+host = [
   "numpy==2.2.6",
   "opencv-python==4.11.0.86",
-  "PyYAML==6.0.2",
   "torch==2.7.1",
   "torchvision==0.22.1",
   "ultralytics==8.4.96",
 ]
-
-[project.optional-dependencies]
 export = [
   "onnx>=1.17,<2",
   "onnxruntime>=1.20,<2",

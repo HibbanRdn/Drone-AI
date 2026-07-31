@@ -15,6 +15,7 @@ def config_dict(tmp_path: Path) -> dict:
     config["runtime"]["root"] = str(tmp_path / "runtime")
     config["runtime"]["device"] = "cpu"
     config["storage"]["max_session_bytes"] = 10 * 1024 * 1024
+    config["storage"]["min_free_bytes"] = 128 * 1024 * 1024
     config["storage"]["log_rotate_bytes"] = 4096
     config["models"]["detector"]["path"] = str(tmp_path / "detector.pt")
     config["models"]["segmenter"]["path"] = str(tmp_path / "segmenter.pt")

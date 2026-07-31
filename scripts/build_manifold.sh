@@ -14,6 +14,9 @@ if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "aarch64" ]]; then
   echo "Build PSDK hanya di Linux aarch64 Manifold 3." >&2
   exit 2
 fi
+"${SOURCE_ROOT}/scripts/check_disk_space.sh" \
+  --path "${APP_ROOT}" --min-mib "${GAP_PLOT_AI_BUILD_MIN_FREE_MIB:-1024}" \
+  --operation "Manifold CMake build"
 "${PYTHON_BIN}" "${SOURCE_ROOT}/scripts/verify_psdk_316.py" "${PSDK_ROOT}"
 
 "${PYTHON_BIN}" "${SOURCE_ROOT}/scripts/psdk_credentials.py" validate \

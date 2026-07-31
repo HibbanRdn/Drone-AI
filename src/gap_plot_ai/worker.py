@@ -8,7 +8,7 @@ import struct
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Tuple
 
 import cv2
 import numpy as np
@@ -34,7 +34,7 @@ def _atomic_text(path: Path, value: str) -> None:
     os.replace(temp, path)
 
 
-def _read_control(path: Path) -> dict[str, int]:
+def _read_control(path: Path) -> Dict[str, int]:
     control = {"running": 1, "plant": 1, "segmenter": 1, "snapshot_seq": 0}
     if not path.is_file():
         return control
@@ -48,7 +48,7 @@ def _read_control(path: Path) -> dict[str, int]:
     return control
 
 
-def read_frame(path: Path) -> tuple[int, int, np.ndarray, Telemetry]:
+def read_frame(path: Path) -> Tuple[int, int, np.ndarray, Telemetry]:
     payload = path.read_bytes()
     if len(payload) < FRAME_HEADER.size:
         raise ValueError("frame spool lebih pendek dari header")

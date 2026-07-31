@@ -9,6 +9,10 @@ PSDK_ROOT="${PSDK_ROOT:?Set PSDK_ROOT ke checkout resmi Payload-SDK tag 3.16.0}"
 export PLOT_GAP_ROOT="${PROJECT_ROOT}"
 export GAP_PLOT_AI_APP_ROOT="${APP_ROOT}"
 
+"${APP_ROOT}/scripts/check_disk_space.sh" \
+  --path "${APP_ROOT}" --min-mib "${GAP_PLOT_AI_BUILD_MIN_FREE_MIB:-512}" \
+  --operation "local validation"
+
 "${APP_ROOT}/.venv/bin/python" "${APP_ROOT}/scripts/verify_psdk_316.py" \
   "${PSDK_ROOT}"
 "${APP_ROOT}/.venv/bin/python" -m compileall -q "${APP_ROOT}/src" "${APP_ROOT}/tests"

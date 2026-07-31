@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 
@@ -39,7 +39,7 @@ class TiledDetection:
     def center_y(self) -> float:
         return (self.y1 + self.y2) / 2.0
 
-    def to_runtime_dict(self) -> dict[str, Any]:
+    def to_runtime_dict(self) -> Dict[str, Any]:
         return {
             "bbox_xyxy": [self.x1, self.y1, self.x2, self.y2],
             "confidence": self.confidence,
@@ -55,7 +55,9 @@ class TiledDetection:
         }
 
 
-def _axis_positions(origin: int, length: int, tile_size: int, overlap: int) -> list[int]:
+def _axis_positions(
+    origin: int, length: int, tile_size: int, overlap: int
+) -> List[int]:
     if length <= tile_size:
         return [origin]
     stride = tile_size - overlap
@@ -71,7 +73,7 @@ def generate_tile_windows(
     frame_height: int,
     tile_size: int,
     overlap: int,
-) -> list[TileWindow]:
+) -> List[TileWindow]:
     if frame_width <= 0 or frame_height <= 0 or tile_size <= 0:
         raise ValueError("frame dimensions and tile_size must be positive")
     if overlap < 0 or overlap >= tile_size:
@@ -91,9 +93,9 @@ def generate_tile_windows(
 
 
 def local_box_to_global(
-    box: list[float] | tuple[float, float, float, float],
+    box: Union[List[float], Tuple[float, float, float, float]],
     tile: TileWindow,
-) -> tuple[float, float, float, float]:
+) -> Tuple[float, float, float, float]:
     x1, y1, x2, y2 = box
     return x1 + tile.x, y1 + tile.y, x2 + tile.x, y2 + tile.y
 
@@ -109,9 +111,9 @@ def box_iou(a: TiledDetection, b: TiledDetection) -> float:
 
 
 def class_aware_nms(
-    detections: list[TiledDetection], iou_threshold: float
-) -> list[TiledDetection]:
-    kept: list[TiledDetection] = []
+    detections: List[TiledDetection], iou_threshold: float
+) -> List[TiledDetection]:
+    kept: List[TiledDetection] = []
     for class_id in sorted({detection.class_id for detection in detections}):
         pending = sorted(
             (
@@ -134,11 +136,11 @@ def class_aware_nms(
 
 
 def center_distance_suppression(
-    detections: list[TiledDetection], radius_px: float
-) -> list[TiledDetection]:
+    detections: List[TiledDetection], radius_px: float
+) -> List[TiledDetection]:
     if radius_px <= 0:
         return list(detections)
-    kept: list[TiledDetection] = []
+    kept: List[TiledDetection] = []
     radius_squared = radius_px * radius_px
     for candidate in sorted(
         detections, key=lambda item: item.confidence, reverse=True
@@ -160,13 +162,13 @@ def center_distance_suppression(
 
 
 def merge_detections(
-    detections: list[TiledDetection],
+    detections: List[TiledDetection],
     *,
     global_nms_iou: float,
     center_duplicate_radius_px: float,
     enable_center_suppression: bool,
     max_detections_full_frame: int,
-) -> tuple[list[TiledDetection], dict[str, int]]:
+) -> Tuple[List[TiledDetection], Dict[str, int]]:
     after_nms = class_aware_nms(detections, global_nms_iou)
     after_center = (
         center_distance_suppression(after_nms, center_duplicate_radius_px)
@@ -185,7 +187,7 @@ def merge_detections(
 
 
 def predict_tiled_detector(
-    model: Any, frame_bgr: np.ndarray, detector_config: dict[str, Any]
+    model: Any, frame_bgr: np.ndarray, detector_config: Dict[str, Any]
 ) -> ModelOutput:
     height, width = frame_bgr.shape[:2]
     windows = generate_tile_windows(
@@ -195,8 +197,8 @@ def predict_tiled_detector(
         int(detector_config["tile_overlap"]),
     )
     started = time.perf_counter()
-    raw: list[TiledDetection] = []
-    warnings: list[str] = []
+    raw: List[TiledDetection] = []
+    warnings: List[str] = []
     preprocessing_ms = 0.0
     inference_ms = 0.0
     postprocessing_ms = 0.0

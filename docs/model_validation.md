@@ -68,7 +68,27 @@ Angka plant adalah deteksi frame saat ini, bukan jumlah tanaman unik.
 
 ## TensorRT
 
-Belum ada engine dan tidak ada benchmark TensorRT. Script memblokir build di
-selain Linux aarch64. Langkah berikutnya adalah build FP16 pada Manifold,
-benchmark `trtexec`, kemudian ONNX/PyTorch vs TensorRT parity. INT8 tidak
-digunakan.
+Inventory perangkat mengonfirmasi TensorRT 8.5.2 untuk CUDA 11.4. Error
+`Model missing or format not recognized` pada report lama berasal dari
+`trtexec --version`, yang bukan probe versi valid pada instalasi tersebut.
+Package metadata/header digunakan untuk inventory versi.
+
+Belum ada engine dan tidak ada benchmark TensorRT. ONNX tetap format
+pertukaran. Engine harus dibangun pada Manifold 3 yang dituju atau environment
+Linux aarch64, GPU, TensorRT 8.5.2, dan CUDA 11.4 yang identik; engine dari
+Mac, Windows x86, GPU lain, atau versi TensorRT lain tidak dianggap portable.
+
+Script `build_engine.sh` memakai TensorRT runtime melalui Ultralytics dan tidak
+mewajibkan `nvcc`. Command berikut baru dijalankan setelah package Python
+target dan ONNX tersedia serta inventory ulang lulus:
+
+```bash
+./scripts/check_disk_space.sh \
+  --path . --min-mib 1024 --operation "TensorRT engine build"
+./scripts/build_engine.sh
+./scripts/benchmark_engine.sh
+./scripts/parity.sh /path/to/representative_test.mp4 engine 0 15 30
+```
+
+INT8 tidak digunakan. Tidak ada engine yang dibangun atau inferensi perangkat
+yang dijalankan dalam audit inventory ini.

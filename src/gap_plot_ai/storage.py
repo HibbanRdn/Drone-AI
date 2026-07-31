@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import threading
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Optional, Union
 
 import cv2
 import numpy as np
@@ -43,7 +44,7 @@ class RotatingJsonlWriter:
         self._file = self.path.open("a", encoding="utf-8")
         self.rotation_count += 1
 
-    def write(self, value: dict[str, Any]) -> int:
+    def write(self, value: Dict[str, Any]) -> int:
         payload = (
             json.dumps(json_safe(value), ensure_ascii=False, separators=(",", ":"))
             + "\n"
@@ -72,13 +73,24 @@ class RotatingJsonlWriter:
 class SessionWriter:
     def __init__(
         self,
-        runtime_root: str | Path,
-        storage_config: dict[str, Any],
-        session_metadata: dict[str, Any],
+        runtime_root: Union[str, Path],
+        storage_config: Dict[str, Any],
+        session_metadata: Dict[str, Any],
     ):
         self.runtime_root = Path(runtime_root).expanduser().resolve()
         self.sessions_root = self.runtime_root / "sessions"
         self.sessions_root.mkdir(parents=True, exist_ok=True)
+        minimum_free_bytes = int(
+            storage_config.get("min_free_bytes", 128 * 1024 * 1024)
+        )
+        available_bytes = shutil.disk_usage(self.runtime_root).free
+        if available_bytes < minimum_free_bytes:
+            raise RuntimeError(
+                "ruang disk runtime tidak cukup: tersedia {} MiB, minimum {} MiB".format(
+                    available_bytes // (1024 * 1024),
+                    minimum_free_bytes // (1024 * 1024),
+                )
+            )
         base = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
         session_dir = self.sessions_root / base
         counter = 1
@@ -156,6 +168,8 @@ class SessionWriter:
             "started_at": datetime.now(timezone.utc).isoformat(),
             "storage_policy": {
                 "max_session_bytes": self._max_session_bytes,
+                "min_free_bytes": minimum_free_bytes,
+                "free_bytes_at_start": available_bytes,
                 "jsonl_rotate_bytes": per_jsonl_bytes,
                 "jsonl_backup_count": jsonl_backup_count,
                 "snapshot_budget_bytes": self._snapshot_budget,
@@ -167,7 +181,7 @@ class SessionWriter:
         self.logger.info("session_started id=%s", self.session_id)
 
     @staticmethod
-    def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
+    def _write_json_atomic(path: Path, value: Dict[str, Any]) -> None:
         temp = path.with_suffix(path.suffix + ".tmp")
         temp.write_text(
             json.dumps(json_safe(value), indent=2, ensure_ascii=False) + "\n",
@@ -200,7 +214,9 @@ class SessionWriter:
             self._record_count += 1
             self._warning_count += len(result.warning)
 
-    def save_snapshot(self, frame_bgr: np.ndarray, frame_index: int) -> Path | None:
+    def save_snapshot(
+        self, frame_bgr: np.ndarray, frame_index: int
+    ) -> Optional[Path]:
         with self._lock:
             if self._closed or self._snapshot_bytes >= self._snapshot_budget:
                 self.logger.warning("snapshot_skipped storage_cap_or_closed")

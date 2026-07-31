@@ -5,7 +5,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 import onnx
 
@@ -13,7 +13,7 @@ from .config import load_config
 from .models import sha256_file
 
 
-def _onnx_metadata(path: Path) -> dict[str, Any]:
+def _onnx_metadata(path: Path) -> Dict[str, Any]:
     graph = onnx.load(str(path), load_external_data=False)
     return {item.key: item.value for item in graph.metadata_props}
 
@@ -37,7 +37,7 @@ def _write_raw_engine(engine_path: Path) -> Path:
     return raw_path
 
 
-def build_one(name: str, config: dict[str, Any], workspace_gib: int) -> dict[str, Any]:
+def build_one(name: str, config: Dict[str, Any], workspace_gib: int) -> Dict[str, Any]:
     from ultralytics.utils.export.engine import onnx2engine
     import tensorrt
     import ultralytics

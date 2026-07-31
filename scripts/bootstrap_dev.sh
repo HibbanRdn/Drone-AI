@@ -5,6 +5,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PROJECT_ROOT="$(cd "${APP_ROOT}/.." && pwd)"
 DEFAULT_PYTHON="${PROJECT_ROOT}/local_inference/b0_manual_v1_video_demo/.venv/bin/python"
+
+if [[ "$(uname -s)" == "Linux" && "$(uname -m)" == "aarch64" ]]; then
+  echo "bootstrap_dev.sh hanya untuk host development, bukan Manifold 3." >&2
+  echo "Audit dependency target Python 3.8/JetPack terlebih dahulu." >&2
+  exit 2
+fi
+
 if [[ -x "${DEFAULT_PYTHON}" ]]; then
   PYTHON_BIN="${PYTHON_BIN:-${DEFAULT_PYTHON}}"
 else
@@ -21,7 +28,7 @@ fi
 
 "${PYTHON_BIN}" -m venv "${APP_ROOT}/.venv"
 "${APP_ROOT}/.venv/bin/python" -m pip install --upgrade pip
-"${APP_ROOT}/.venv/bin/python" -m pip install -e "${APP_ROOT}[export,test]"
+"${APP_ROOT}/.venv/bin/python" -m pip install -e "${APP_ROOT}[host,export,test]"
 
 if [[ ! -f "${APP_ROOT}/config/app.yaml" ]]; then
   cp "${APP_ROOT}/config/app.example.yaml" "${APP_ROOT}/config/app.yaml"

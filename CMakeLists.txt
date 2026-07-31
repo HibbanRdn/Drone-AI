@@ -67,5 +67,10 @@ set_target_properties(gap_plot_ai PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
+message(STATUS "Gap Plot AI target: Linux ${CMAKE_SYSTEM_PROCESSOR}, C++17")
+message(STATUS "PSDK library: ${PSDK_LIB}")
+message(STATUS
+  "OpenCV: not linked by native frontend; Python cv2 must select one target installation")
+
 install(TARGETS gap_plot_ai RUNTIME DESTINATION bin)
 install(DIRECTORY config/widget DESTINATION share/gap_plot_ai)

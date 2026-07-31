@@ -5,13 +5,15 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 from .config import load_config
 from .models import sha256_file
 
 
-def export_one(name: str, model_config: dict[str, Any], output_dir: Path) -> dict[str, Any]:
+def export_one(
+    name: str, model_config: Dict[str, Any], output_dir: Path
+) -> Dict[str, Any]:
     from ultralytics import YOLO
     import onnx
     import torch

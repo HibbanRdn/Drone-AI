@@ -14,6 +14,9 @@ if ! command -v trtexec >/dev/null 2>&1; then
   echo "trtexec tidak tersedia pada runtime yang diaudit." >&2
   exit 3
 fi
+"${SOURCE_ROOT}/scripts/check_disk_space.sh" \
+  --path "${APP_ROOT}" --min-mib "${GAP_PLOT_AI_REPORT_MIN_FREE_MIB:-512}" \
+  --operation "TensorRT benchmark report"
 mkdir -p "${REPORT_DIR}"
 
 for model in plant_detector_b0_manual_v1_best plot_segmenter_b4_selected_best; do

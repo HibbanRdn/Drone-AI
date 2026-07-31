@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -15,7 +15,7 @@ from .tiling import predict_tiled_detector
 
 
 class InferenceRuntime:
-    def __init__(self, config: dict[str, Any], *, backend: str = "auto"):
+    def __init__(self, config: Dict[str, Any], *, backend: str = "auto"):
         self.config = config
         self.backend = backend
         self.status = "Initializing"
@@ -23,8 +23,8 @@ class InferenceRuntime:
         self.plant_enabled = bool(config["models"]["detector"]["enabled"])
         self.segmenter_enabled = bool(config["models"]["segmenter"]["enabled"])
         self._closed = False
-        self._last_segmentation: ModelOutput | None = None
-        self._last_result: FrameResult | None = None
+        self._last_segmentation: Optional[ModelOutput] = None
+        self._last_result: Optional[FrameResult] = None
         self._started_perf = time.perf_counter()
         self._processed = 0
         device = select_device(str(config["runtime"]["device"]))
@@ -65,9 +65,9 @@ class InferenceRuntime:
     def set_controls(
         self,
         *,
-        running: bool | None = None,
-        plant_enabled: bool | None = None,
-        segmenter_enabled: bool | None = None,
+        running: Optional[bool] = None,
+        plant_enabled: Optional[bool] = None,
+        segmenter_enabled: Optional[bool] = None,
     ) -> None:
         if running is not None:
             self.running = bool(running)
@@ -90,16 +90,16 @@ class InferenceRuntime:
         frame_index: int,
         capture_timestamp: str,
         camera_source: str,
-        telemetry: Telemetry | None = None,
+        telemetry: Optional[Telemetry] = None,
         snapshot: bool = False,
-    ) -> tuple[FrameResult, np.ndarray]:
+    ) -> Tuple[FrameResult, np.ndarray]:
         if self._closed:
             raise RuntimeError("runtime sudah ditutup")
         if frame_bgr.ndim != 3 or frame_bgr.shape[2] != 3 or frame_bgr.size == 0:
             raise ValueError("frame harus HxWx3 non-empty")
         telemetry = telemetry or Telemetry()
         started = time.perf_counter()
-        warning: list[str] = []
+        warning: List[str] = []
         detector_output = ModelOutput()
         segment_output = ModelOutput()
         detector_ran = False
@@ -236,7 +236,7 @@ class InferenceRuntime:
 def draw_overlay(
     frame_bgr: np.ndarray,
     result: FrameResult,
-    overlay_config: dict[str, Any],
+    overlay_config: Dict[str, Any],
     status: str,
 ) -> np.ndarray:
     output = frame_bgr.copy()

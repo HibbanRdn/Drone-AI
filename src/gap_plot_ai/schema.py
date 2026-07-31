@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Dict, List, Optional, Union
 
 
 def json_safe(value: Any) -> Any:
@@ -17,30 +17,30 @@ def json_safe(value: Any) -> Any:
 
 @dataclass
 class Telemetry:
-    aircraft_latitude: float | None = None
-    aircraft_longitude: float | None = None
-    relative_altitude: float | None = None
-    absolute_altitude: float | None = None
-    gimbal_pitch: float | None = None
-    aircraft_heading: float | None = None
-    rtk_status: int | str | None = None
-    source_timestamp: str | None = None
+    aircraft_latitude: Optional[float] = None
+    aircraft_longitude: Optional[float] = None
+    relative_altitude: Optional[float] = None
+    absolute_altitude: Optional[float] = None
+    gimbal_pitch: Optional[float] = None
+    aircraft_heading: Optional[float] = None
+    rtk_status: Optional[Union[int, str]] = None
+    source_timestamp: Optional[str] = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         return json_safe(asdict(self))
 
 
 @dataclass
 class ModelOutput:
-    detections: list[dict[str, Any]] = field(default_factory=list)
-    contours: list[list[list[float]]] = field(default_factory=list)
-    mask: Any | None = None
+    detections: List[Dict[str, Any]] = field(default_factory=list)
+    contours: List[List[List[float]]] = field(default_factory=list)
+    mask: Optional[Any] = None
     latency_ms: float = 0.0
-    preprocessing_ms: float | None = None
-    inference_ms: float | None = None
-    postprocessing_ms: float | None = None
-    warning: str | None = None
-    diagnostics: dict[str, Any] = field(default_factory=dict)
+    preprocessing_ms: Optional[float] = None
+    inference_ms: Optional[float] = None
+    postprocessing_ms: Optional[float] = None
+    warning: Optional[str] = None
+    diagnostics: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -52,21 +52,21 @@ class FrameResult:
     camera_source: str
     image_width: int
     image_height: int
-    plant_detections: list[dict[str, Any]]
-    plot_segmentation: dict[str, Any] | None
-    model_version: dict[str, str]
-    model_sha256: dict[str, str]
-    confidence_threshold: dict[str, float]
+    plant_detections: List[Dict[str, Any]]
+    plot_segmentation: Optional[Dict[str, Any]]
+    model_version: Dict[str, str]
+    model_sha256: Dict[str, str]
+    confidence_threshold: Dict[str, float]
     inference_latency_ms: float
-    aircraft_latitude: float | None
-    aircraft_longitude: float | None
-    relative_altitude: float | None
-    absolute_altitude: float | None
-    gimbal_pitch: float | None
-    aircraft_heading: float | None
-    rtk_status: int | str | None
-    warning: list[str]
-    metrics: dict[str, Any] = field(default_factory=dict)
+    aircraft_latitude: Optional[float]
+    aircraft_longitude: Optional[float]
+    relative_altitude: Optional[float]
+    absolute_altitude: Optional[float]
+    gimbal_pitch: Optional[float]
+    aircraft_heading: Optional[float]
+    rtk_status: Optional[Union[int, str]]
+    warning: List[str]
+    metrics: Dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         return json_safe(asdict(self))

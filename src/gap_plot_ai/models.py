@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Optional, Union
 
 import cv2
 import numpy as np
@@ -12,7 +12,7 @@ from .geometry import mask_to_contours
 from .schema import ModelOutput
 
 
-def sha256_file(path: str | Path, chunk_size: int = 1024 * 1024) -> str:
+def sha256_file(path: Union[str, Path], chunk_size: int = 1024 * 1024) -> str:
     digest = hashlib.sha256()
     with Path(path).open("rb") as source:
         for chunk in iter(lambda: source.read(chunk_size), b""):
@@ -20,7 +20,7 @@ def sha256_file(path: str | Path, chunk_size: int = 1024 * 1024) -> str:
     return digest.hexdigest()
 
 
-def resolve_backend_path(model_config: dict[str, Any], backend: str) -> Path:
+def resolve_backend_path(model_config: Dict[str, Any], backend: str) -> Path:
     if backend not in {"auto", "pt", "onnx", "engine"}:
         raise ValueError(f"Backend tidak didukung: {backend}")
     candidates = (
@@ -44,10 +44,10 @@ def resolve_backend_path(model_config: dict[str, Any], backend: str) -> Path:
 class UltralyticsModel:
     def __init__(
         self,
-        model_config: dict[str, Any],
+        model_config: Dict[str, Any],
         *,
         backend: str,
-        device: str | int,
+        device: Union[str, int],
     ):
         from ultralytics import YOLO
         import ultralytics
@@ -74,7 +74,7 @@ class UltralyticsModel:
         self.sha256 = sha256_file(self.path)
         self.ultralytics_version = ultralytics.__version__
 
-    def audit(self) -> dict[str, Any]:
+    def audit(self) -> Dict[str, Any]:
         return {
             "path": str(self.path),
             "backend": self.backend,
@@ -141,7 +141,7 @@ class UltralyticsModel:
         confidence = boxes.conf.detach().cpu().numpy()
         classes = boxes.cls.detach().cpu().numpy().astype(int)
         detections = []
-        for box, score, class_id in zip(xyxy, confidence, classes, strict=True):
+        for box, score, class_id in zip(xyxy, confidence, classes):
             if not np.all(np.isfinite(box)) or not np.isfinite(score):
                 continue
             detections.append(
@@ -180,7 +180,7 @@ class UltralyticsModel:
         return ModelOutput(contours=contours, mask=binary)
 
 
-def select_device(requested: str) -> str | int:
+def select_device(requested: str) -> Union[str, int]:
     if requested not in {"auto", "cpu", "mps", "cuda", "0"}:
         raise ValueError("runtime.device harus auto/cpu/mps/cuda/0")
     if requested != "auto":
@@ -194,7 +194,7 @@ def select_device(requested: str) -> str | int:
     return "cpu"
 
 
-def _float_or_none(value: Any) -> float | None:
+def _float_or_none(value: Any) -> Optional[float]:
     try:
         result = float(value)
     except (TypeError, ValueError):

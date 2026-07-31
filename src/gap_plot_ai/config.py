@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Union
 
 import yaml
 
@@ -25,7 +25,7 @@ def _expand(value: Any) -> Any:
     return value
 
 
-def load_config(path: str | Path) -> dict[str, Any]:
+def load_config(path: Union[str, Path]) -> Dict[str, Any]:
     config_path = Path(path).expanduser().resolve()
     if not config_path.is_file():
         raise ConfigError(f"Config tidak ditemukan: {config_path}")
@@ -38,7 +38,9 @@ def load_config(path: str | Path) -> dict[str, Any]:
     return config
 
 
-def validate_config(config: dict[str, Any], *, require_model_files: bool = False) -> None:
+def validate_config(
+    config: Dict[str, Any], *, require_model_files: bool = False
+) -> None:
     for section in ("app", "camera", "runtime", "models", "overlay", "storage"):
         if not isinstance(config.get(section), dict):
             raise ConfigError(f"Section '{section}' wajib ada dan berupa mapping.")
@@ -92,6 +94,8 @@ def validate_config(config: dict[str, Any], *, require_model_files: bool = False
     storage = config["storage"]
     if int(storage.get("max_session_bytes", 0)) < 1024 * 1024:
         raise ConfigError("storage.max_session_bytes minimal 1 MiB.")
+    if int(storage.get("min_free_bytes", 128 * 1024 * 1024)) < 128 * 1024 * 1024:
+        raise ConfigError("storage.min_free_bytes minimal 128 MiB.")
     if int(storage.get("log_rotate_bytes", 0)) < 1024:
         raise ConfigError("storage.log_rotate_bytes minimal 1 KiB.")
     if int(storage.get("jsonl_rotate_bytes", 0)) < 1024:

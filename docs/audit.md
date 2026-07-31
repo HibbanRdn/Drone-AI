@@ -67,7 +67,7 @@ frame, morphology, lalu contour sederhana.
 Sebelum pekerjaan ini tidak ditemukan ONNX atau TensorRT engine untuk kedua
 model. Hasil export saat ini dicatat di `model_validation.md`.
 
-## Dependency lokal terverifikasi
+## Dependency host development terverifikasi
 
 - Python 3.10.19
 - PyTorch 2.7.1
@@ -82,6 +82,12 @@ Venv terisolasi ada di `manifold_app/.venv`. Percobaan awal yang tidak cocok
 dengan Python 3.14 dipindahkan secara recoverable ke path ignored
 `.venv_py314_failed`; tidak dipakai runtime.
 
+Pin tersebut hanya untuk host development. Baseline Manifold aktual adalah
+Python 3.8.10, CUDA 11.4, cuDNN 8.6.0, dan TensorRT 8.5.2. Source target sudah
+kompatibel dengan grammar/API Python 3.8, sedangkan package berat target harus
+dipilih sebagai wheel aarch64/JetPack yang kompatibel dan tidak dipasang oleh
+`bootstrap_dev.sh`.
+
 ## Video uji
 
 Path yang disebut tanpa subfolder tidak ada. Video yang benar ditemukan secara
@@ -95,8 +101,10 @@ HEVC, 3840×2160, 30000/1001 fps, 1.109 frame, durasi 37,003633 detik.
 
 Source dan lokal: `local_ready`, `model_export_ready`.
 
-Belum dibuktikan pada hardware: `hardware_blocked`, `psdk_blocked`;
-`on_device_validated=false`; `dpk_ready=false`.
+Inventory hardware aktual sudah tersedia. Build/activation/liveview dan AI
+runtime pada hardware belum dibuktikan: `psdk_blocked`;
+`on_device_validated=false`; `dpk_ready=false`. Daftar aplikasi perangkat
+hanya menunjukkan `Smart3DExplore` resmi DJI; `gap_plot_ai` belum terpasang.
 
 ## Identitas DJI Developer
 

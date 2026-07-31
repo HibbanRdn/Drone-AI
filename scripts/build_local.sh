@@ -18,7 +18,12 @@ export GAP_PLOT_AI_APP_ROOT="${APP_ROOT}"
 "${APP_ROOT}/.venv/bin/python" -m compileall -q "${APP_ROOT}/src" "${APP_ROOT}/tests"
 "${APP_ROOT}/.venv/bin/python" -m pytest "${APP_ROOT}/tests"
 
-if command -v clang++ >/dev/null 2>&1; then
+if command -v clang++ >/dev/null 2>&1 && clang++ \
+  -std=c++17 -x c++ -fsyntax-only - >/dev/null 2>&1 <<'CPP_PROBE'
+#include <algorithm>
+int main() { return 0; }
+CPP_PROBE
+then
   clang++ -std=c++17 -fsyntax-only "${APP_ROOT}/src/psdk/main.cpp" \
     -I"${APP_ROOT}/include" \
     -I"${PSDK_ROOT}/psdk_lib/include" \
@@ -31,5 +36,7 @@ if command -v clang++ >/dev/null 2>&1; then
     -I"${PSDK_ROOT}/psdk_lib/include" \
     -I"${PSDK_ROOT}/samples/sample_c++/platform/linux/common" \
     -I"${PSDK_ROOT}/samples/sample_c++/platform/linux/manifold3/hal"
+else
+  echo "WARNING: C++ syntax check skipped; host compiler/stdlib is incomplete." >&2
 fi
-echo "Local build/test checks passed."
+echo "Available local checks passed; Linux aarch64 build was not performed."

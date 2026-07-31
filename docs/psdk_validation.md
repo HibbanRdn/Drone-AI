@@ -44,6 +44,7 @@ Status: `psdk_blocked`.
 
 - Inventory OS/toolchain berhasil, tetapi `gap_plot_ai` tidak tercantum pada
   `dji_app_ctl list/status` dan tidak dianggap terpasang.
+- Build Linux aarch64 custom belum dijalankan pada Manifold.
 - Build dan run official sample pada Manifold.
 - PSDK registration/activation nyata.
 - Product type dan mount type nyata.

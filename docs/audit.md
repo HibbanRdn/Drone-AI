@@ -88,6 +88,12 @@ kompatibel dengan grammar/API Python 3.8, sedangkan package berat target harus
 dipilih sebagai wheel aarch64/JetPack yang kompatibel dan tidak dipasang oleh
 `bootstrap_dev.sh`.
 
+Inventory terbaru membuktikan NumPy 1.17.4, `cv2` 4.5.4 dari `/usr/local`,
+dan binding TensorRT 8.5.2.2 tersedia. ONNX, PyTorch, dan Ultralytics belum
+tersedia, sehingga engine build dan AI runtime tetap diblokir oleh preflight.
+Native C++ sengaja tidak menautkan OpenCV untuk menghindari campuran library
+4.2 sistem dan 4.5 `/usr/local`.
+
 ## Video uji
 
 Path yang disebut tanpa subfolder tidak ada. Video yang benar ditemukan secara
@@ -103,8 +109,9 @@ Source dan lokal: `local_ready`, `model_export_ready`.
 
 Inventory hardware aktual sudah tersedia. Build/activation/liveview dan AI
 runtime pada hardware belum dibuktikan: `psdk_blocked`;
-`on_device_validated=false`; `dpk_ready=false`. Daftar aplikasi perangkat
-hanya menunjukkan `Smart3DExplore` resmi DJI; `gap_plot_ai` belum terpasang.
+`ai_runtime_blocked=true`; `on_device_validated=false`; `dpk_ready=false`.
+Daftar aplikasi perangkat hanya menunjukkan `Smart3DExplore` resmi DJI;
+`gap_plot_ai` belum terpasang.
 
 ## Identitas DJI Developer
 

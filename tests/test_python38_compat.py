@@ -8,6 +8,7 @@ from pathlib import Path
 APP_ROOT = Path(__file__).resolve().parents[1]
 TARGET_PYTHON_FILES = sorted((APP_ROOT / "src" / "gap_plot_ai").glob("*.py")) + [
     APP_ROOT / "scripts" / "psdk_credentials.py",
+    APP_ROOT / "scripts" / "check_manifold_ai_runtime.py",
     APP_ROOT / "scripts" / "verify_psdk_316.py",
 ]
 

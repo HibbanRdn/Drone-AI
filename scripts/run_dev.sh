@@ -7,6 +7,7 @@ APP_ROOT="${GAP_PLOT_AI_APP_ROOT:-${SOURCE_ROOT}}"
 CONFIG="${GAP_PLOT_AI_CONFIG:-${SOURCE_ROOT}/config/app.yaml}"
 IPC_DIR="${APP_ROOT}/runtime/ipc"
 PID_DIR="${APP_ROOT}/runtime/pids"
+REPORT_DIR="${APP_ROOT}/runtime/reports"
 GATE="${APP_ROOT}/runtime/gates/psdk_liveview_verified"
 NATIVE_BIN="${APP_ROOT}/build/bin/gap_plot_ai"
 PYTHON_BIN="${APP_ROOT}/.venv/bin/python"
@@ -19,11 +20,15 @@ if [[ ! -x "${NATIVE_BIN}" || ! -x "${PYTHON_BIN}" ]]; then
   echo "Build binary/venv Manifold belum siap." >&2
   exit 3
 fi
+"${PYTHON_BIN}" \
+  "${SOURCE_ROOT}/scripts/check_manifold_ai_runtime.py" --phase runtime
 "${SOURCE_ROOT}/scripts/check_disk_space.sh" \
   --path "${APP_ROOT}" --min-mib "${GAP_PLOT_AI_RUNTIME_MIN_FREE_MIB:-1536}" \
   --operation "Gap Plot AI runtime"
 
-mkdir -p "${IPC_DIR}" "${PID_DIR}" "${APP_ROOT}/runtime/logs"
+mkdir -p \
+  "${IPC_DIR}" "${PID_DIR}" "${REPORT_DIR}" \
+  "${APP_ROOT}/runtime/logs" "${APP_ROOT}/data/logs"
 export GAP_PLOT_AI_APP_ROOT="${APP_ROOT}"
 export PLOT_GAP_ROOT="${PLOT_GAP_ROOT:-${APP_ROOT}}"
 export GAP_PLOT_AI_IPC_DIR="${IPC_DIR}"

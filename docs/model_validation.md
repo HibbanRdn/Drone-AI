@@ -73,6 +73,10 @@ Inventory perangkat mengonfirmasi TensorRT 8.5.2 untuk CUDA 11.4. Error
 `trtexec --version`, yang bukan probe versi valid pada instalasi tersebut.
 Package metadata/header digunakan untuk inventory versi.
 
+Inventory terbaru mengonfirmasi binding Python TensorRT 8.5.2.2 dan
+`trtexec` di `/usr/src/tensorrt/bin/trtexec`. ONNX, PyTorch, dan Ultralytics
+belum terpasang, sehingga builder engine belum dapat dijalankan.
+
 Belum ada engine dan tidak ada benchmark TensorRT. ONNX tetap format
 pertukaran. Engine harus dibangun pada Manifold 3 yang dituju atau environment
 Linux aarch64, GPU, TensorRT 8.5.2, dan CUDA 11.4 yang identik; engine dari

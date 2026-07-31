@@ -6,6 +6,7 @@ Status 31 Juli 2026:
 - `model_export_ready`: ya
 - `hardware_inventory_ready`: ya
 - `psdk_blocked`: ya
+- `ai_runtime_blocked`: ya
 - `on_device_validated`: tidak
 - `dpk_ready`: tidak
 
@@ -67,10 +68,12 @@ engine berada di path yang di-ignore Git.
 
 ## Baseline dan audit Manifold
 
-Inventory read-only aktual mengonfirmasi Ubuntu 20.04.6 aarch64, Python
-3.8.10, GCC 9.4, CMake 3.16.3, CUDA 11.4, cuDNN 8.6, TensorRT 8.5.2, serta
-sekitar 8,7 GiB ruang kosong. `dji_app_ctl` hanya menampilkan aplikasi resmi
-DJI `Smart3DExplore`; `gap_plot_ai` belum terpasang.
+Inventory read-only terbaru mengonfirmasi Ubuntu 20.04.6 aarch64 pada NVIDIA
+Orin NX, Python 3.8.10, GCC 9.4, CMake 3.16.3, CUDA 11.4, cuDNN 8.6,
+TensorRT 8.5.2, serta sekitar 8,7 GiB ruang kosong. `cv2` aktif adalah 4.5.4
+dari `/usr/local`; ONNX, PyTorch, dan Ultralytics belum tersedia.
+`dji_app_ctl` hanya menampilkan aplikasi resmi DJI `Smart3DExplore`;
+`gap_plot_ai` belum terpasang.
 
 Untuk mengulang inventory setelah laptop mempunyai interface debug
 `192.168.42.x`:
@@ -88,6 +91,13 @@ memblokir Linux aarch64. Source runtime mendukung Python 3.8, tetapi wheel
 NumPy/OpenCV/PyTorch/Ultralytics target harus diaudit terhadap aarch64,
 JetPack/L4T, CUDA 11.4, dan TensorRT 8.5.2 sebelum instalasi. Tidak ada
 dependency atau aplikasi yang dipasang pada Manifold dalam audit ini.
+
+Preflight target yang tidak menginstal apa pun:
+
+```bash
+.venv/bin/python scripts/check_manifold_ai_runtime.py --phase engine
+.venv/bin/python scripts/check_manifold_ai_runtime.py --phase runtime
+```
 
 Credential portal tersimpan hanya di `config/secrets.env` yang ignored dan
 berizin `600`. `scripts/psdk_credentials.py` memvalidasi ukuran buffer resmi
@@ -165,8 +175,10 @@ direktori IPC sebelum `DjiCore_Init`. Runtime:
 
 `dpk/app.json.in` adalah template sumber, bukan package siap instal.
 `scripts/build_dpk.sh` sengaja gagal sampai sample resmi, liveview, engine
-FP16, parity, ground test, dan strategi dependency DPK yang didukung DJI
-lulus. Tidak ada DPK yang dibuat atau diinstal.
+FP16, parity, ground test, versi firmware untuk `ver_min/ver_max`, serta
+strategi dependency statis DPK yang didukung DJI lulus. Worker
+Python/Ultralytics saat ini belum dapat dianggap dependency DPK yang valid.
+Tidak ada DPK yang dibuat atau diinstal.
 
 Setelah gate DPK benar-benar lulus, command resmi pengelolaan aplikasi adalah
 sebagai referensi operator dan belum dijalankan:
@@ -184,7 +196,8 @@ Instalasi file versi baru digunakan untuk update. Jangan menjalankan
 ground test stabil.
 
 Lihat [audit lokal](docs/audit.md), [inventory
-Manifold](docs/manifold_inventory.md), [validasi
+Manifold](docs/manifold_inventory.md), [readiness build/package/upload
+Manifold](docs/manifold_readiness.md), [validasi
 model](docs/model_validation.md), [validasi PSDK](docs/psdk_validation.md), dan
 [ground test](docs/ground_test.md).
 
@@ -194,4 +207,4 @@ demo](https://developer.dji.com/doc/payload-sdk-tutorial/en/manifold-quick-start
 [Custom Widget](https://developer.dji.com/doc/payload-sdk-tutorial/en/basic-function/custom-widget.html),
 [build DPK](https://developer.dji.com/doc/payload-sdk-tutorial/en/manifold-quick-start/build-dpk.html),
 dan [application
-management](https://developer.dji.com/doc/payload-sdk-tutorial/en/manifold-quick-start/manifold-platform-capabilities/application-management.html).
+management](https://developer.dji.com/doc/payload-sdk-tutorial/en/manifold-quick-start/manifold-platform-capabilities/system-tools.html).

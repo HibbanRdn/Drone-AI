@@ -14,6 +14,8 @@ if [[ ! -x "${APP_ROOT}/.venv/bin/python" ]]; then
   echo "Venv Manifold belum tersedia; audit runtime/dependency sebelum instalasi." >&2
   exit 3
 fi
+"${APP_ROOT}/.venv/bin/python" \
+  "${SOURCE_ROOT}/scripts/check_manifold_ai_runtime.py" --phase engine
 "${SOURCE_ROOT}/scripts/check_disk_space.sh" \
   --path "${APP_ROOT}" --min-mib "${GAP_PLOT_AI_ENGINE_MIN_FREE_MIB:-1024}" \
   --operation "TensorRT engine build"

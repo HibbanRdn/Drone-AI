@@ -97,7 +97,9 @@ echo "# python packages"
 python3 - <<'PY' 2>&1 || true
 import importlib
 
-for package_name in ("numpy", "cv2", "onnx", "tensorrt", "torch", "ultralytics"):
+for package_name in (
+    "yaml", "numpy", "cv2", "onnx", "tensorrt", "torch", "ultralytics"
+):
     try:
         module = importlib.import_module(package_name)
         version = getattr(module, "__version__", "unknown")

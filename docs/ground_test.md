@@ -5,6 +5,7 @@ Jangan jalankan motor atau flight. Propeller tidak diperlukan untuk test ini.
 Prasyarat:
 
 - inventory Manifold sudah ditinjau;
+- preflight `--phase engine` dan `--phase runtime` lulus;
 - tidak ada update firmware/OS/JetPack/CUDA/TensorRT;
 - credential dimasukkan lokal dan tidak dicetak;
 - official PSDK sample gate sudah lulus;

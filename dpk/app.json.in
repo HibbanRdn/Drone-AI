@@ -1,0 +1,28 @@
+{
+  "user_app_id": "189927",
+  "firmware_version": "00.01.00.00",
+  "is_ai_rendering": "true",
+  "platform": "manifold3",
+  "name": {
+    "name_cn": "ggp-drone-ai",
+    "name_en": "ggp-drone-ai",
+    "name_jp": "ggp-drone-ai",
+    "name_fr": "ggp-drone-ai"
+  },
+  "description": {
+    "description_cn": ["Onboard plant detection and plot segmentation"],
+    "description_en": ["Onboard plant detection and plot segmentation"],
+    "description_jp": ["Onboard plant detection and plot segmentation"],
+    "description_fr": ["Onboard plant detection and plot segmentation"]
+  },
+  "maintainer": {
+    "maintainer_cn": "Muhamad Hibban Ramadhan",
+    "maintainer_en": "Muhamad Hibban Ramadhan",
+    "maintainer_jp": "Muhamad Hibban Ramadhan",
+    "maintainer_fr": "Muhamad Hibban Ramadhan"
+  },
+  "ver_min": "@MANIFOLD_VER_MIN@",
+  "ver_max": "@MANIFOLD_VER_MAX@",
+  "bin": "bin/gap_plot_ai",
+  "userconfig": ["share"]
+}

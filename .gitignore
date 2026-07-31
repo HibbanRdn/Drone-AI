@@ -1,0 +1,57 @@
+# Local credentials and machine-specific configuration
+.env
+.env.*
+!.env.example
+config/secrets.env
+config/*.secret.*
+config/app.yaml
+
+# Python environments and caches
+.venv/
+.venv_*/
+*.egg-info/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Native and package build output
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+dpk/build/
+dpk/staging/
+dpk/*.dpk
+
+# Runtime state and generated application data
+runtime/
+data/
+*.pid
+*.sock
+*.tmp
+*.log
+*.jsonl
+
+# Models, inference output, and media
+*.pt
+*.pth
+*.onnx
+*.engine
+*.plan
+*.trt
+*.rgb
+*.MP4
+*.mp4
+*.MOV
+*.mov
+
+# Editor and operating-system files
+.DS_Store
+.localized
+.vscode/
+.idea/
+*~

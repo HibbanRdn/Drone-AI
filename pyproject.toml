@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gap-plot-ai"
+version = "0.1.0"
+description = "Offline-first DJI Manifold 3 inference worker for plant and plot overlays."
+requires-python = ">=3.10"
+dependencies = [
+  "numpy==2.2.6",
+  "opencv-python==4.11.0.86",
+  "PyYAML==6.0.2",
+  "torch==2.7.1",
+  "torchvision==0.22.1",
+  "ultralytics==8.4.96",
+]
+
+[project.optional-dependencies]
+export = [
+  "onnx>=1.17,<2",
+  "onnxruntime>=1.20,<2",
+]
+test = [
+  "pytest==8.4.1",
+]
+
+[project.scripts]
+gap-plot-ai-offline = "gap_plot_ai.offline:main"
+gap-plot-ai-worker = "gap_plot_ai.worker:main"
+gap-plot-ai-export = "gap_plot_ai.export_models:main"
+gap-plot-ai-parity = "gap_plot_ai.parity:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]

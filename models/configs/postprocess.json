@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "registration": {
+    "preview_width": 960,
+    "feature": "sift",
+    "max_features": 3000,
+    "ratio_test": 0.75,
+    "ransac_reprojection_px_preview": 2.5,
+    "min_mutual_matches": 80,
+    "min_inliers": 50,
+    "min_inlier_ratio": 0.4,
+    "max_p95_reprojection_px_preview": 3.0,
+    "min_scale": 0.94,
+    "max_scale": 1.06,
+    "max_rotation_deg_per_edge": 2.0,
+    "homography_min_inlier_gain": 0.08,
+    "max_homography_perspective": 0.00015,
+    "fallbacks": ["klt"]
+  },
+  "mosaic": {
+    "max_preview_width": 4200,
+    "max_preview_height": 2400,
+    "minimum_keyframe_center_displacement_px": 900,
+    "jpeg_quality": 92
+  },
+  "tracking_and_unique_count": {
+    "association_spacing_fraction": 0.34,
+    "association_registration_multiplier": 2.5,
+    "association_radius_min_px": 4.0,
+    "association_radius_max_spacing_fraction": 0.42,
+    "max_track_gap_processed_frames": 3,
+    "tracklet_merge_radius_fraction": 0.75,
+    "confirmed_min_observations": 3,
+    "suspicious_singleton_min_opportunity": 5
+  },
+  "coverage": {
+    "roi_height": 2048,
+    "minimum_gap_opportunity": 3
+  },
+  "plot_roi": {
+    "coordinate_space": "mosaic_local_full_resolution_pixels",
+    "manual_polygon_required_for_legacy_gap_analysis": true,
+    "ai_assisted_polygon_requires_operator_authorization": true
+  },
+  "gap_analysis": {
+    "minimum_plants_per_plot": 40,
+    "minimum_plants_per_row": 5,
+    "row_angle_bin_deg": 2.0,
+    "row_assignment_band_spacing_fraction": 0.42,
+    "missing_match_spacing_fraction": 0.42,
+    "boundary_buffer_row_spacing_fraction": 2.5,
+    "minimum_coverage_opportunity": 3,
+    "maximum_evidence_images": 30
+  },
+  "provenance": "tools/b0_manual_v1_video_demo/postprocess/config.py"
+}

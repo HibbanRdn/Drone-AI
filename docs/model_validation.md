@@ -1,6 +1,6 @@
 # Validasi model
 
-Tanggal: 31 Juli 2026.
+Tanggal validasi ulang: 1 Agustus 2026.
 
 ## Export ONNX
 
@@ -9,8 +9,8 @@ FP32, fixed shape, tanpa embedded NMS. ONNX checker lulus.
 
 | Model | Input/output | Ukuran | SHA-256 ONNX |
 |---|---|---:|---|
-| detector | `(1,3,1024,1024)` -> `(1,5,21504)` | 12.500.682 byte | `92a44b5f76a2ca8ceb385d0b4b2a34756cdcf7f3f1a10bea6ababdfdbe86b370` |
-| segmenter | `(1,3,1280,1280)` -> `(1,37,33600)` dan `(1,32,320,320)` | 47.847.658 byte | `a2df02fe16cc0b57940fcd9669220eca493350ce40a59bd388e968958b5c7019` |
+| detector | `(1,3,1024,1024)` -> `(1,5,21504)` | 12.500.679 byte | `7e753abe2f09b494c0c61fa7b44243ace6a73757bce6711ffd703765ef4588d6` |
+| segmenter | `(1,3,1280,1280)` -> `(1,37,33600)` dan `(1,32,320,320)` | 47.847.658 byte | `ec68f308dbc0138d143b9c9e849005131784b14731b595c3bc165ddcb1ac7734` |
 
 Report machine-readable:
 `runtime/reports/model_export_report.json`.
@@ -22,13 +22,13 @@ dan global merge pada kedua backend, bukan hanya satu resize full-frame.
 Parity lulus dengan toleransi config: count ±2, confidence absolut 0,03, bbox
 absolut 4 px, dan union mask IoU minimum 0,98.
 
-- Count detector PT/ONNX: 744/744, 766/766, dan 689/689.
+- Count detector PT/ONNX: 3351/3351, 3332/3332, dan 3322/3322.
 - Count delta maksimum: 0.
 - Unmatched detection maksimum: 0.
-- Confidence error maksimum: 0,00000233.
+- Confidence error maksimum: 0,00000224.
 - Bbox error maksimum: 0,000122 px.
-- Mean bbox IoU minimum: 0,99999904.
-- Segment union IoU: 0,99999965–1,0.
+- Mean bbox IoU minimum: 0,99999910.
+- Segment union IoU: 1,0 pada ketiga frame.
 
 Mismatch awal berhasil ditelusuri ke rectangular inference PyTorch sementara
 ONNX fixed-square. Runtime kini memakai `rect=False` secara eksplisit; threshold,
@@ -38,10 +38,10 @@ Latency per frame pada MacBook Air M1, sehingga bukan benchmark Manifold:
 
 | Model/backend | Frame 0 | Frame 15 | Frame 30 |
 |---|---:|---:|---:|
-| detector tiled PyTorch | 3.882,88 ms | 3.115,03 ms | 3.019,11 ms |
-| detector tiled ONNX | 1.871,30 ms | 1.879,48 ms | 1.792,72 ms |
-| segmenter PyTorch | 845,01 ms | 918,12 ms | 848,77 ms |
-| segmenter ONNX | 664,26 ms | 654,50 ms | 630,68 ms |
+| detector tiled PyTorch | 15.433,45 ms | 14.451,77 ms | 14.442,66 ms |
+| detector tiled ONNX | 13.250,14 ms | 13.169,36 ms | 13.256,14 ms |
+| segmenter PyTorch | 983,70 ms | 1.139,83 ms | 1.001,14 ms |
+| segmenter ONNX | 678,48 ms | 655,47 ms | 688,63 ms |
 
 Report: `runtime/reports/parity_pt_onnx.json`.
 Parity ONNX ini memakai CPUExecutionProvider untuk mengisolasi perbedaan

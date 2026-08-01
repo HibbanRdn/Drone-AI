@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
@@ -24,15 +26,8 @@ def export_one(
     expected_hash = str(model_config["source_sha256"])
     if source_hash != expected_hash:
         raise ValueError(f"SHA-256 {name} tidak sama dengan registry/config")
-    link = output_dir / f"{name}.pt"
-    if link.is_symlink():
-        if link.resolve() != source:
-            raise ValueError(f"Symlink export menunjuk target lain: {link}")
-    elif link.exists():
-        raise FileExistsError(f"Tidak akan menimpa file export staging: {link}")
-    else:
-        link.symlink_to(source)
-    model = YOLO(str(link), task=str(model_config["task"]))
+    export_config = model_config["onnx_export"]
+    model = YOLO(str(source), task=str(model_config["task"]))
     names = {int(key): str(value) for key, value in model.names.items()}
     expected_names = {
         int(key): str(value) for key, value in model_config["class_names"].items()
@@ -41,26 +36,29 @@ def export_one(
         raise ValueError(
             f"Metadata checkpoint {name} berubah: task={model.task}, names={names}"
         )
-    exported = Path(
-        model.export(
-            format="onnx",
-            imgsz=int(model_config["image_size"]),
-            batch=1,
-            dynamic=False,
-            simplify=False,
-            opset=17,
-            half=False,
-            int8=False,
-            nms=False,
-            device="cpu",
-        )
-    ).resolve()
     target = Path(model_config["onnx_path"]).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
-    if exported != target:
-        if target.exists():
-            target.unlink()
-        os.replace(exported, target)
+    with tempfile.TemporaryDirectory(prefix=f"{name}_", dir=str(output_dir)) as temporary_dir:
+        staged_source = Path(temporary_dir) / f"{name}.pt"
+        staged_source.symlink_to(source)
+        staged_model = YOLO(str(staged_source), task=str(model_config["task"]))
+        exported = Path(
+            staged_model.export(
+                format="onnx",
+                imgsz=int(model_config["image_size"]),
+                batch=int(export_config["batch"]),
+                dynamic=bool(export_config["dynamic"]),
+                simplify=bool(export_config["simplify"]),
+                opset=int(export_config["opset"]),
+                half=bool(export_config["fp16"]),
+                int8=bool(export_config["int8"]),
+                nms=bool(export_config["embedded_nms"]),
+                device="cpu",
+            )
+        ).resolve()
+        temporary_target = target.with_suffix(target.suffix + ".tmp")
+        shutil.copyfile(exported, temporary_target)
+        os.replace(temporary_target, target)
     graph = onnx.load(str(target))
     onnx.checker.check_model(graph)
     return {
@@ -71,11 +69,11 @@ def export_one(
         "task": model.task,
         "class_names": names,
         "image_size": int(model_config["image_size"]),
-        "opset": 17,
-        "dynamic": False,
-        "simplify": False,
-        "half": False,
-        "nms_embedded": False,
+        "opset": int(export_config["opset"]),
+        "dynamic": bool(export_config["dynamic"]),
+        "simplify": bool(export_config["simplify"]),
+        "half": bool(export_config["fp16"]),
+        "nms_embedded": bool(export_config["embedded_nms"]),
         "onnx": str(target),
         "onnx_sha256": sha256_file(target),
         "onnx_size_bytes": target.stat().st_size,
@@ -105,7 +103,7 @@ def main() -> None:
     result = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "models": [
-            export_one("plant_detector_b0_manual_v1_best", config["models"]["detector"], output_dir),
+            export_one("plant_center_manual_v1_b0_best", config["models"]["detector"], output_dir),
             export_one("plot_segmenter_b4_selected_best", config["models"]["segmenter"], output_dir),
         ],
     }

@@ -10,7 +10,7 @@ import yaml
 @pytest.fixture
 def config_dict(tmp_path: Path) -> dict:
     root = Path(__file__).parents[1]
-    raw = yaml.safe_load((root / "config/app.example.yaml").read_text(encoding="utf-8"))
+    raw = yaml.safe_load((root / "config/app.yaml").read_text(encoding="utf-8"))
     config = deepcopy(raw)
     config["runtime"]["root"] = str(tmp_path / "runtime")
     config["runtime"]["device"] = "cpu"

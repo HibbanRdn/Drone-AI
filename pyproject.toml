@@ -25,6 +25,16 @@ export = [
   "onnx>=1.17,<2",
   "onnxruntime>=1.20,<2",
 ]
+postprocess = [
+  "numpy==2.2.6",
+  "opencv-python==4.11.0.86",
+  "pandas>=2.2,<3",
+  "scipy>=1.13,<2",
+  "shapely>=2.0,<3",
+  "torch==2.7.1",
+  "torchvision==0.22.1",
+  "ultralytics==8.4.96",
+]
 test = [
   "pytest==8.4.1",
 ]

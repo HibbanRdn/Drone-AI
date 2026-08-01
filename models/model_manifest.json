@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-01T10:02:30+07:00",
+  "artifacts": [
+    {
+      "file": "models/source/plant_center_manual_v1_b0_best.pt",
+      "format": "PyTorch Ultralytics checkpoint",
+      "sha256": "5076ac21814b4ad1955dbdc3cc7aa25dca62659914467e0e651fbb7f8d821266",
+      "size_bytes": 6335402,
+      "function": "plant-center detection and plant point extraction",
+      "input_shape": [1, 3, 1024, 1024],
+      "classes": {"0": "plant"},
+      "source_training_run": "plant_center_manual_v1_yolov8n_dense_b0_no_online_aug",
+      "target_runtime": ["host PyTorch", "ONNX export source"],
+      "validation_status": "checkpoint metadata and checksum verified",
+      "required_after_clone": true
+    },
+    {
+      "file": "models/source/plot_segmenter_b4_selected_best.pt",
+      "format": "PyTorch Ultralytics checkpoint",
+      "sha256": "1fd2a8d78fda17f3f2938035aced92f0c2aa346cdf26df3d71b87a15982f3519",
+      "size_bytes": 94876772,
+      "function": "plantable-area/plot ROI segmentation",
+      "input_shape": [1, 3, 1280, 1280],
+      "classes": {"0": "plantable_area"},
+      "source_training_run": "C_random_crop_control, selected comparison epoch 56",
+      "target_runtime": ["host PyTorch", "ONNX export source"],
+      "validation_status": "checkpoint metadata and checksum verified",
+      "required_after_clone": true
+    },
+    {
+      "file": "models/onnx/plant_center_manual_v1_b0_best.onnx",
+      "format": "ONNX",
+      "sha256": "7e753abe2f09b494c0c61fa7b44243ace6a73757bce6711ffd703765ef4588d6",
+      "size_bytes": 12500679,
+      "function": "portable detector inference and TensorRT build input",
+      "input_shape": [1, 3, 1024, 1024],
+      "classes": {"0": "plant"},
+      "source_training_run": "exported from plant_center_manual_v1_b0_best.pt",
+      "target_runtime": ["ONNX Runtime", "TensorRT 8.5.2 build input"],
+      "validation_status": "ONNX checker passed; PT/ONNX parity tested",
+      "required_after_clone": true
+    },
+    {
+      "file": "models/onnx/plot_segmenter_b4_selected_best.onnx",
+      "format": "ONNX",
+      "sha256": "ec68f308dbc0138d143b9c9e849005131784b14731b595c3bc165ddcb1ac7734",
+      "size_bytes": 47847658,
+      "function": "portable ROI segmentation and TensorRT build input",
+      "input_shape": [1, 3, 1280, 1280],
+      "classes": {"0": "plantable_area"},
+      "source_training_run": "exported from plot_segmenter_b4_selected_best.pt",
+      "target_runtime": ["ONNX Runtime", "TensorRT 8.5.2 build input"],
+      "validation_status": "ONNX checker passed; PT/ONNX parity tested",
+      "required_after_clone": true
+    }
+  ],
+  "planned_engines": [
+    {
+      "file": "models/engine/plant_center_manual_v1_b0_tensorrt-8.5.2_cuda-11.4_aarch64_fp16.engine",
+      "status": "not built; must be built and validated on Manifold 3 or identical target"
+    },
+    {
+      "file": "models/engine/plot_segmenter_b4_selected_tensorrt-8.5.2_cuda-11.4_aarch64_fp16.engine",
+      "status": "not built; must be built and validated on Manifold 3 or identical target"
+    }
+  ]
+}

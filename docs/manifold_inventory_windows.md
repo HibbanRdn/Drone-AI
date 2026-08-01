@@ -125,7 +125,7 @@ script, atau laporan audit.
 Buka Git Bash, lalu masuk ke repository dan siapkan direktori laporan lokal:
 
 ```bash
-cd "/c/Users/$USERNAME/Documents/Drone-AI"
+cd "$(git rev-parse --show-toplevel)"
 mkdir -p runtime/reports
 ```
 

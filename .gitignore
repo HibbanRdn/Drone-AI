@@ -4,7 +4,6 @@
 !.env.example
 config/secrets.env
 config/*.secret.*
-config/app.yaml
 
 # Python environments and caches
 .venv/
@@ -28,26 +27,38 @@ dpk/staging/
 dpk/*.dpk
 
 # Runtime state and generated application data
-runtime/
-data/
+/runtime/
+/data/
 *.pid
 *.sock
 *.tmp
 *.log
 *.jsonl
 
-# Models, inference output, and media
-*.pt
+# Training checkpoints other than the audited deployment artifacts
 *.pth
-*.onnx
-*.engine
 *.plan
 *.trt
+
+# Raw datasets and temporary inference media/output
+datasets/raw/
+datasets/downloads/
+outputs/
 *.rgb
 *.MP4
 *.mp4
 *.MOV
 *.mov
+
+# Common credential material
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+service-account*.json
+.aws/
+.config/gh/
 
 # Editor and operating-system files
 .DS_Store

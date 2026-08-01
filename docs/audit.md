@@ -4,7 +4,7 @@ Tanggal audit: 31 Juli 2026.
 
 ## Project dan Git
 
-- Root: `/Users/muhamadhibbanramadhan/Documents/Plot Gap`.
+- Root audit lama sudah dinormalisasi menjadi root repository saat ini.
 - Demo aktif: `local_inference/b0_manual_v1_video_demo`.
 - Project berada di dalam working tree parent yang sudah berisi banyak data
   user; tidak ada commit, push, reset, atau penghapusan dilakukan.
@@ -19,7 +19,7 @@ Sumber kebenaran adalah upstream DJI exact tag `3.16.0`, commit
 `libpayloadsdk.a` memiliki SHA-256
 `c940d6d88f449ef6f48e535e0b765f4bf8486db44702d4d64e37da156d204426`.
 
-Mirror/reference `/Users/muhamadhibbanramadhan/Documents/Payload-SDK-master`
+Mirror/reference PSDK lokal berada di luar repository dan dipilih melalui `PSDK_ROOT`.
 berada pada commit berbeda
 `9bbacae3e3a5fd9e8a3d550fc3692cd212490341`, sehingga tidak lagi diterima
 oleh script build sebagai bukti exact tag walaupun library aarch64 dan file
@@ -99,7 +99,7 @@ Native C++ sengaja tidak menautkan OpenCV untuk menghindari campuran library
 Path yang disebut tanpa subfolder tidak ada. Video yang benar ditemukan secara
 terarah di:
 
-`/Users/muhamadhibbanramadhan/Movies/New Flight/recut_with_srt/pipeline_input_part1/DJI_20260729141517_0030_V_part1_000-037.MP4`
+`/path/to/representative_test.mp4`
 
 HEVC, 3840×2160, 30000/1001 fps, 1.109 frame, durasi 37,003633 detik.
 

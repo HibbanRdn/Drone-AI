@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "plant_center_manual_v1_b0": {
+    "training_run": "plant_center_manual_v1_yolov8n_dense_b0_no_online_aug",
+    "architecture": "yolov8n.pt",
+    "task": "detect",
+    "image_size": 1024,
+    "class_names": {"0": "plant"},
+    "epochs_requested": 100,
+    "patience": 20,
+    "batch": 2,
+    "seed": 42,
+    "deterministic": true,
+    "online_augmentation": false,
+    "training_amp": true,
+    "validation_confidence": 0.001,
+    "validation_iou": 0.3,
+    "validation_max_detections": 1000,
+    "deployment_confidence": 0.2,
+    "deployment_iou": 0.1,
+    "source": "plant_center_manual_v1_yolo_b0_artifacts/args.yaml and deployment config"
+  },
+  "plot_segmenter_b4_selected": {
+    "training_run": "C_random_crop_control",
+    "architecture": "yolov8s-seg.pt",
+    "task": "segment",
+    "image_size": 1280,
+    "class_names": {"0": "plantable_area"},
+    "selected_comparison_epoch_one_based": 56,
+    "selected_checkpoint_sha256": "1fd2a8d78fda17f3f2938035aced92f0c2aa346cdf26df3d71b87a15982f3519",
+    "selection_uses_validation_only": true,
+    "source": "segmentasi_plot_b4_selected_artifacts/config/model_config.json"
+  }
+}

@@ -19,14 +19,15 @@ belum dijalankan dalam audit.
 - runtime membuat `data/logs` serta `runtime/ipc`, `runtime/reports`, dan
   session bounded;
 - build/engine/runtime melakukan preflight kapasitas disk;
-- report, credential, model, engine, build output, dan DPK tetap ignored Git.
+- report, credential, build output, dan DPK tetap ignored Git; model PT/ONNX
+  wajib tersedia melalui Git LFS, sedangkan engine ditambahkan setelah build target.
 
 ## Blocker sebelum build AI
 
 - ONNX, PyTorch, dan Ultralytics belum tersedia pada Manifold;
 - kompatibilitas wheel target dengan Python 3.8/aarch64/CUDA 11.4 belum
   dibuktikan;
-- ONNX kedua model harus tersedia dan checksum-nya diverifikasi;
+- ONNX kedua model sudah tersedia melalui Git LFS dan checksum-nya diverifikasi;
 - engine FP16 belum dibangun dan belum diuji;
 - credential lokal lengkap termasuk `DJI_DEVELOPER_ACCOUNT` belum boleh
   diasumsikan hanya dari report.

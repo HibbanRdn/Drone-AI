@@ -33,9 +33,31 @@ def load_config(path: Union[str, Path]) -> Dict[str, Any]:
     if not isinstance(raw, dict):
         raise ConfigError("Config root harus berupa mapping YAML.")
     config = _expand(deepcopy(raw))
+    repo_root = config_path.parent.parent
+    _resolve_repository_paths(config, repo_root)
     validate_config(config)
     config["_config_path"] = str(config_path)
+    config["_repo_root"] = str(repo_root)
     return config
+
+
+def _resolve_repository_paths(config: Dict[str, Any], repo_root: Path) -> None:
+    """Resolve checked-in relative paths from the repository root, not the CWD."""
+
+    runtime = config.get("runtime", {})
+    if "root" in runtime:
+        runtime["root"] = str(_repo_path(runtime["root"], repo_root))
+    for model in config.get("models", {}).values():
+        if not isinstance(model, dict):
+            continue
+        for key in ("path", "onnx_path", "engine_path"):
+            if key in model:
+                model[key] = str(_repo_path(model[key], repo_root))
+
+
+def _repo_path(value: Any, repo_root: Path) -> Path:
+    path = Path(str(value)).expanduser()
+    return path.resolve() if path.is_absolute() else (repo_root / path).resolve()
 
 
 def validate_config(

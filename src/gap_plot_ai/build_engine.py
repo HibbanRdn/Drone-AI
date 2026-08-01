@@ -53,12 +53,15 @@ def build_one(name: str, config: Dict[str, Any], workspace_gib: int) -> Dict[str
         raise ValueError(f"Metadata ONNX {name} tidak lengkap: {missing}")
     engine_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = engine_path.with_suffix(".engine.tmp")
+    target = config["tensorrt"]
+    if str(target["precision"]).upper() != "FP16":
+        raise ValueError("Builder Manifold saat ini hanya mengizinkan FP16")
     onnx2engine(
         str(onnx_path),
         str(temporary),
         workspace=workspace_gib,
         quantize=16,
-        dynamic=False,
+        dynamic=bool(target["dynamic"]),
         shape=(1, 3, int(config["image_size"]), int(config["image_size"])),
         metadata=metadata,
         verbose=False,
@@ -103,7 +106,7 @@ def main() -> None:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "models": [
             build_one(
-                "plant_detector_b0_manual_v1_best",
+                "plant_center_manual_v1_b0_best",
                 config["models"]["detector"],
                 args.workspace_gib,
             ),

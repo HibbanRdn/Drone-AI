@@ -1,6 +1,6 @@
 # gap_plot_ai
 
-Status 31 Juli 2026:
+Status repository 1 Agustus 2026:
 
 - `local_ready`: ya
 - `model_export_ready`: ya
@@ -24,9 +24,48 @@ Portal menunjukkan apply status `accepted` dan application status
 perangkat, tetapi distribusi aplikasi belum terverifikasi dibatasi maksimal 20
 perangkat. Tidak ada perubahan dilakukan pada portal.
 
-Ini adalah MVP onboard khusus DJI Matrice 4E + Manifold 3. Aplikasi tidak
+Ini adalah MVP onboard khusus DJI Matrice 4E + Manifold 3. Live runtime tidak
 memanggil flight control, joystick, waypoint, gimbal control, camera control,
-training, cloud, S3, georeferencing, atau gap analysis final.
+training, cloud, atau S3. Source tracking, unique counting, georeferencing, dan
+gap analysis tersedia sebagai workflow post-processing offline di
+tools/b0_manual_v1_video_demo; hasilnya tidak diklaim sebagai output live PSDK.
+
+## Clone sampai dev-run
+
+Semua source, model, config, exporter, TensorRT builder, PSDK frontend, dan
+source post-processing berada di repository. Raw dataset/video, credential,
+environment, cache, dan output runtime tetap lokal.
+
+~~~bash
+git clone https://github.com/HibbanRdn/Drone-AI.git
+cd Drone-AI
+git lfs install
+git lfs pull
+python3 scripts/model_preflight.py
+
+# Buat environment host tanpa mengubah Python global
+./scripts/bootstrap_dev.sh
+
+# ONNX sudah tersedia; command ini mereproduksi export bila diperlukan
+./scripts/export_models.sh
+
+# Native host build dan offline dev-run
+./scripts/build_local.sh
+./scripts/run_offline.sh /path/to/input.mp4 onnx 6
+~~~
+
+Alur ringkas: clone/pull → git lfs pull → validasi model → build ulang
+ONNX/TensorRT bila diperlukan → build native app → dev-run.
+
+Windows PowerShell memakai artifact dan config yang sama:
+
+~~~powershell
+git lfs install
+git lfs pull
+py scripts/model_preflight.py
+py -m venv .venv
+.venv\Scripts\python -m pip install -e ".[host,export,test,postprocess]"
+~~~
 
 ## Arsitektur
 
@@ -52,19 +91,21 @@ digambar pada frame AI sebelum dikirim melalui encoder resmi PSDK.
 ## Verifikasi lokal
 
 ```bash
-cd "/Users/muhamadhibbanramadhan/Documents/Plot Gap"
+cd "$(git rev-parse --show-toplevel)"
 export PSDK_ROOT="/path/to/official/Payload-SDK-3.16.0"
-./manifold_app/scripts/bootstrap_dev.sh
-./manifold_app/scripts/build_local.sh
-./manifold_app/scripts/export_models.sh
+./scripts/bootstrap_dev.sh
+./scripts/build_local.sh
+./scripts/export_models.sh
 
-VIDEO="/Users/muhamadhibbanramadhan/Movies/New Flight/recut_with_srt/pipeline_input_part1/DJI_20260729141517_0030_V_part1_000-037.MP4"
-./manifold_app/scripts/parity.sh "$VIDEO" onnx 0 15 30
-./manifold_app/scripts/run_offline.sh "$VIDEO" onnx 6
+VIDEO=/path/to/representative_test.mp4
+./scripts/parity.sh "$VIDEO" onnx 0 15 30
+./scripts/run_offline.sh "$VIDEO" onnx 6
 ```
 
-Artefak ONNX, report, session, snapshot, log, video preview, weight, dan
-engine berada di path yang di-ignore Git.
+Checkpoint PT dan ONNX berada di `models/` dan dilacak Git LFS. Report, session,
+snapshot, log, video preview, raw media, runtime cache, dan build output tetap
+di-ignore. TensorRT engine baru boleh ditambahkan ke `models/engine` setelah
+dibangun dan divalidasi di Manifold 3/target identik.
 
 ## Baseline dan audit Manifold
 
@@ -195,7 +236,7 @@ Instalasi file versi baru digunakan untuk update. Jangan menjalankan
 `uninstall` terhadap aplikasi lain dan jangan mengaktifkan auto-start sebelum
 ground test stabil.
 
-Lihat [audit lokal](docs/audit.md), [inventory
+Lihat [audit artifact](docs/artifact_audit.md), [audit lokal](docs/audit.md), [inventory
 Manifold](docs/manifold_inventory.md), [readiness build/package/upload
 Manifold](docs/manifold_readiness.md), [validasi
 model](docs/model_validation.md), [validasi PSDK](docs/psdk_validation.md), dan

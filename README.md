@@ -1,12 +1,14 @@
 # gap_plot_ai
 
-Status repository 1 Agustus 2026:
+Status repository 3 Agustus 2026:
 
 - `local_ready`: ya
+- `live_orchestration_ready`: ya (replay/fake backend)
 - `model_export_ready`: ya
 - `hardware_inventory_ready`: ya
+- `offline_tensorrt_baseline_reported`: ya (source device belum tersinkron)
 - `psdk_blocked`: ya
-- `ai_runtime_blocked`: ya
+- `live_ai_runtime_blocked`: ya
 - `on_device_validated`: tidak
 - `dpk_ready`: tidak
 
@@ -17,7 +19,7 @@ Identitas aplikasi:
 | DJI Developer App | `ggp-drone-ai` / App ID `189927` |
 | Service/package internal | `gap_plot_ai` |
 | DPK application identifier | `ggp-drone-ai` |
-| Display alias Pilot 2 | `Gap Plot AI` |
+| Display alias Pilot 2 | `Gap Plot AI DEV` |
 
 Portal menunjukkan apply status `accepted` dan application status
 `Not Verified`. Status ini tidak memblokir development/ground test pada satu
@@ -70,23 +72,29 @@ py -m venv .venv
 ## Arsitektur
 
 ```text
-M4E_VIS RGB frame (PSDK 3.16)
-  -> C++ latest-frame spool (frame lama di-drop)
-  -> Python worker
-     -> detector: tile 1024, overlap 128, merge global
-     -> segmenter: 1280, interval terpisah
-  -> JSONL + telemetry + metrics + snapshot opsional
-  -> C++ result reader
-     -> bbox: PSDK AI recognition metadata (maks. 200 teratas ke Pilot 2)
-     -> plot contour: digambar pada RGB AI-rendered stream
-  -> PSDK H.264 encoder -> Pilot 2
-  -> Custom Widget: Start/Stop, layer switches, Snapshot, status
+M4E_VIS decoded RGB callback (PSDK 3.16)
+  -> replace-only latest frame buffer
+  -> binary v2 spool on /dev/shm (capacity 1)
+  -> persistent Python/TensorRT worker
+     -> native-resolution tile 1024 / overlap 128
+     -> TorchVision CUDA global NMS, center suppression off
+  -> full JSONL + frame-associated PSDK telemetry
+  -> confidence-ranked PSDK metadata subset (auto ABI limit 255)
+  -> normal Pilot 2 liveview + DEV widget status/metrics
 ```
 
 Open AR tidak dipakai untuk contour piksel karena API itu menerima koordinat
-geografis. Seluruh hasil detector tetap disimpan ke JSONL; batas 200 hanya
-untuk metadata tampilan Pilot 2. Contour segmentasi disederhanakan dan
-digambar pada frame AI sebelum dikirim melalui encoder resmi PSDK.
+geografis. Seluruh hasil detector tetap disimpan ke JSONL; overlay Pilot hanya
+subset. Rendered H.264 contour stream default-nya nonaktif. Live config hanya
+mengklaim plant detection; gap candidate tetap `N/A` sampai post-processing
+gap nyata dan inputnya tersedia.
+
+Replay orchestration tanpa hardware:
+
+```bash
+./scripts/run_replay_test.sh
+./scripts/run_replay_test.sh /path/to/replay.mp4
+```
 
 ## Verifikasi lokal
 
@@ -162,8 +170,9 @@ header resmi PSDK tetap tidak berisi credential plaintext.
 
 ```bash
 export PSDK_ROOT="/path/on/manifold/Payload-SDK-3.16.0"
-export GAP_PLOT_AI_APP_ROOT="/home/dji/gap_plot_ai_dev"
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/build_psdk_sample.sh"
+export GAP_PLOT_AI_APP_ROOT="/home/dji/gap_plot_ai_dev/source"
+export GAP_PLOT_AI_SECRETS_FILE="/home/dji/gap_plot_ai_dev/config/secrets.env"
+"$GAP_PLOT_AI_APP_ROOT/scripts/build_psdk_sample.sh"
 ```
 
 Dengan aircraft tetap di tanah dan motor tidak dijalankan, sample harus
@@ -172,7 +181,7 @@ membuktikan product type M4E, telemetry, callback frame
 tersebut:
 
 ```bash
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/mark_psdk_verified.sh" \
+"$GAP_PLOT_AI_APP_ROOT/scripts/mark_psdk_verified.sh" \
   --official-sample-liveview-and-widget-passed
 ```
 
@@ -184,13 +193,14 @@ environment target identik:
 
 ```bash
 export PSDK_ROOT="/path/on/manifold/Payload-SDK-3.16.0"
-export GAP_PLOT_AI_APP_ROOT="/home/dji/gap_plot_ai_dev"
+export GAP_PLOT_AI_APP_ROOT="/home/dji/gap_plot_ai_dev/source"
+export GAP_PLOT_AI_SECRETS_FILE="/home/dji/gap_plot_ai_dev/config/secrets.env"
 
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/build_engine.sh"
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/benchmark_engine.sh"
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/parity.sh" \
+"$GAP_PLOT_AI_APP_ROOT/scripts/build_engine.sh"
+"$GAP_PLOT_AI_APP_ROOT/scripts/benchmark_engine.sh"
+"$GAP_PLOT_AI_APP_ROOT/scripts/parity.sh" \
   "/path/to/representative_test.mp4" engine 0 15 30
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/build_manifold.sh"
+"$GAP_PLOT_AI_APP_ROOT/scripts/build_manifold.sh"
 ```
 
 Setiap operasi melakukan preflight ruang kosong. Default minimum 1 GiB untuk
@@ -200,22 +210,22 @@ runtime dan tidak mewajibkan `nvcc`. ONNX adalah format pertukaran; engine dari
 macOS, Windows x86, GPU lain, CUDA lain, atau TensorRT lain tidak digunakan.
 
 `deploy_dev.sh` mengecualikan secret dari source archive, lalu mentransfer file
-credential secara terpisah ke `${GAP_PLOT_AI_APP_ROOT}/config/secrets.env`
+credential secara terpisah ke `/home/dji/gap_plot_ai_dev/config/secrets.env`
 dengan permission `600`. Runtime native memakai identitas yang sudah
 dikompilasi, tidak memasukkan `.env` ke DPK, serta membuat `data/logs` dan
 direktori IPC sebelum `DjiCore_Init`. Runtime:
 
 ```bash
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/run_dev.sh"
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/status.sh"
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/logs.sh"
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/stop_dev.sh"
+"$GAP_PLOT_AI_APP_ROOT/scripts/run_dev.sh"
+"$GAP_PLOT_AI_APP_ROOT/scripts/status.sh"
+"$GAP_PLOT_AI_APP_ROOT/scripts/logs.sh"
+"$GAP_PLOT_AI_APP_ROOT/scripts/stop_dev.sh"
 ```
 
 ## DPK
 
 `dpk/app.json.in` adalah template sumber, bukan package siap instal.
-`scripts/build_dpk.sh` sengaja gagal sampai sample resmi, liveview, engine
+`scripts/build_dpk.sh` mempunyai gate nyata dan gagal jelas sampai sample resmi, liveview, engine
 FP16, parity, ground test, versi firmware untuk `ver_min/ver_max`, serta
 strategi dependency statis DPK yang didukung DJI lulus. Worker
 Python/Ultralytics saat ini belum dapat dianggap dependency DPK yang valid.
@@ -236,7 +246,8 @@ Instalasi file versi baru digunakan untuk update. Jangan menjalankan
 `uninstall` terhadap aplikasi lain dan jangan mengaktifkan auto-start sebelum
 ground test stabil.
 
-Lihat [audit artifact](docs/artifact_audit.md), [audit lokal](docs/audit.md), [inventory
+Lihat [live app](docs/manifold_live_app.md), [hardware acceptance](docs/manifold_hardware_test.md),
+[audit artifact](docs/artifact_audit.md), [audit lokal](docs/audit.md), [inventory
 Manifold](docs/manifold_inventory.md), [readiness build/package/upload
 Manifold](docs/manifold_readiness.md), [validasi
 model](docs/model_validation.md), [validasi PSDK](docs/psdk_validation.md), dan

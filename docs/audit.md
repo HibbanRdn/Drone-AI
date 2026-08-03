@@ -1,14 +1,17 @@
 # Audit lokal
 
-Tanggal audit: 31 Juli 2026.
+Tanggal audit terakhir: 3 Agustus 2026.
 
 ## Project dan Git
 
 - Root audit lama sudah dinormalisasi menjadi root repository saat ini.
 - Demo aktif: `local_inference/b0_manual_v1_video_demo`.
-- Project berada di dalam working tree parent yang sudah berisi banyak data
-  user; tidak ada commit, push, reset, atau penghapusan dilakukan.
-- Pipeline/demo lama dan weight sumber tidak dimodifikasi.
+- Repository `Drone-AI` terpisah dari working tree parent yang berisi data
+  user. Baseline bersih diaudit sebelum branch feature dibuat; perubahan parent
+  tidak disentuh.
+- Weight sumber tidak dimodifikasi. Demo lama hanya diubah pada global NMS
+  TorchVision dan default center suppression agar tidak meregresikan baseline
+  device yang diberikan operator.
 - `.gitignore` root ditambah untuk venv, build, runtime, session, log, JSONL,
   model/weight, ONNX, TensorRT engine, video, DPK intermediate, dan secret.
 
@@ -19,8 +22,8 @@ Sumber kebenaran adalah upstream DJI exact tag `3.16.0`, commit
 `libpayloadsdk.a` memiliki SHA-256
 `c940d6d88f449ef6f48e535e0b765f4bf8486db44702d4d64e37da156d204426`.
 
-Mirror/reference PSDK lokal berada di luar repository dan dipilih melalui `PSDK_ROOT`.
-berada pada commit berbeda
+Mirror/reference PSDK lokal berada di luar repository dan dipilih melalui
+`PSDK_ROOT`. Mirror tersebut berada pada commit berbeda
 `9bbacae3e3a5fd9e8a3d550fc3692cd212490341`, sehingga tidak lagi diterima
 oleh script build sebagai bukti exact tag walaupun library aarch64 dan file
 Manifold 3 relevannya identik. Repo mirror sudah mempunyai perubahan user:
@@ -52,16 +55,18 @@ mengelola konfigurasi jaringan.
 
 | Model | Task/class | Konfigurasi sumber | SHA-256 sumber |
 |---|---|---|---|
-| `plant_detector_b0_manual_v1_best.pt` | detect, `0=plant` | 1024; conf 0,2; NMS 0,1; tile 1024/overlap 128; global NMS 0,1; center suppression 8 px; maks 1.000/tile dan 5.000/frame | `5076ac21814b4ad1955dbdc3cc7aa25dca62659914467e0e651fbb7f8d821266` |
+| `plant_detector_b0_manual_v1_best.pt` | detect, `0=plant` | 1024; conf 0,2; NMS 0,1; tile 1024/overlap 128; global TorchVision NMS 0,1; center suppression nonaktif; maks 1.000/tile dan 5.000/frame | `5076ac21814b4ad1955dbdc3cc7aa25dca62659914467e0e651fbb7f8d821266` |
 | `plot_segmenter_b4_selected_best.pt` | segment, `0=plantable_area` | 1280; selected conf 0,03; NMS 0,7; opening lalu closing kernel 3 | `1fd2a8d78fda17f3f2938035aced92f0c2aa346cdf26df3d71b87a15982f3519` |
 
 Kedua descriptive path adalah symlink. Target dan registry cocok dengan
 weight sumber di `Downloads`; SHA-256 symlink dan target identik. Tidak ada
 weight yang dipindahkan, ditimpa, atau dihapus.
 
-Detector lama mengembalikan bbox pixel global setelah tiled inference,
-class-aware global NMS, dan center-distance suppression. Runtime baru memakai
-algoritme dan nilai yang sama. Segmenter membentuk union mask, resize ke ukuran
+Detector lama mengembalikan bbox pixel global setelah tiled inference dan
+class-aware global NMS. Branch sebelum live refactor masih memakai Python NMS
+dan center-distance suppression aktif; live runtime sekarang mengunci
+TorchVision batched NMS dan center suppression nonaktif sesuai baseline device
+yang diberikan operator. Segmenter membentuk union mask, resize ke ukuran
 frame, morphology, lalu contour sederhana.
 
 Sebelum pekerjaan ini tidak ditemukan ONNX atau TensorRT engine untuk kedua
@@ -78,7 +83,7 @@ model. Hasil export saat ini dicatat di `model_validation.md`.
 - ONNX 1.22.0
 - ONNX Runtime 1.23.2
 
-Venv terisolasi ada di `manifold_app/.venv`. Percobaan awal yang tidak cocok
+Venv terisolasi ada di `Drone-AI/.venv`. Percobaan awal yang tidak cocok
 dengan Python 3.14 dipindahkan secara recoverable ke path ignored
 `.venv_py314_failed`; tidak dipakai runtime.
 
@@ -93,6 +98,11 @@ dan binding TensorRT 8.5.2.2 tersedia. ONNX, PyTorch, dan Ultralytics belum
 tersedia, sehingga engine build dan AI runtime tetap diblokir oleh preflight.
 Native C++ sengaja tidak menautkan OpenCV untuk menghindari campuran library
 4.2 sistem dan 4.5 `/usr/local`.
+
+Upaya audit ulang source `/home/dji/gap_plot_ai_dev/source` melalui
+`dji@192.168.42.120` timeout pada environment ini. Karena itu perbedaan byte
+source benchmark perangkat terhadap branch ini belum dapat diverifikasi dan
+tidak direkonstruksi dengan tebakan.
 
 ## Video uji
 
@@ -122,7 +132,7 @@ Daftar aplikasi perangkat hanya menunjukkan `Smart3DExplore` resmi DJI;
 - Batas distribusi sebelum verification: maksimal 20 perangkat.
 - Service/package internal tetap `gap_plot_ai`.
 - DPK identifier dipetakan ke `ggp-drone-ai`.
-- Alias yang akan tampil di Pilot 2: `Gap Plot AI`.
+- Alias yang akan tampil di Pilot 2: `Gap Plot AI DEV`.
 - Tidak ada unit systemd custom; development memakai runner foreground,
   sedangkan DPK nantinya dikelola oleh `dji_app_ctl`.
 

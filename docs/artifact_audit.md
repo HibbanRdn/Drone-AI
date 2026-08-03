@@ -1,6 +1,6 @@
 # Deployment artifact audit
 
-Audit tanggal 1 Agustus 2026.
+Audit terakhir 3 Agustus 2026.
 
 | Kapabilitas | Source/config/artifact repository | Status |
 |---|---|---|
@@ -11,10 +11,10 @@ Audit tanggal 1 Agustus 2026.
 | Tracking/unique count | registration + fusion tool, postprocess config | offline tersedia |
 | Gap analysis | row reconstruction, expected/missing points, grouping | offline tersedia |
 | ONNX | dua model checked-in dan exporter reproducible | checker/parity diuji |
-| TensorRT | target config dan guarded build script | engine belum dibangun |
+| TensorRT | target config dan guarded build script | engine tidak ada di repo; benchmark device dilaporkan, source/engine belum tersinkron |
 | PSDK frontend | src/psdk, CMake, widget config | source tersedia; device gate belum lulus |
 | Dev-run | bootstrap, build, run, status/log scripts | tersedia |
-| DPK | template dan intentionally-blocked build gate | belum siap packaging |
+| DPK | payload staging, validator, official tool invocation, dan hardware gates | flow siap; final device package diblokir |
 
 Yang sengaja tidak masuk:
 
@@ -29,7 +29,8 @@ Nilai yang belum diketahui atau belum tervalidasi:
 - TensorRT engine checksum/size/parity/benchmark, karena engine wajib dibuat
   pada Manifold 3 atau target identik;
 - versi firmware package untuk DPK ver_min/ver_max;
-- packaging resmi seluruh dependency runtime Python ke DPK;
+- readback packaging resmi seluruh dependency runtime Python target pada
+  Manifold/Pilot 2;
 - on-device PSDK liveview/widget, TensorRT parity, dan ground test.
 
 Artifact model tidak dibuat ulang dari nilai rekaan. Checkpoint berasal dari

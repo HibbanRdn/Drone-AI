@@ -77,7 +77,15 @@ Inventory terbaru mengonfirmasi binding Python TensorRT 8.5.2.2 dan
 `trtexec` di `/usr/src/tensorrt/bin/trtexec`. ONNX, PyTorch, dan Ultralytics
 belum terpasang, sehingga builder engine belum dapat dijalankan.
 
-Belum ada engine dan tidak ada benchmark TensorRT. ONNX tetap format
+Repository ini belum memuat engine. Audit host 1 Agustus belum memiliki
+benchmark TensorRT. Setelah audit tersebut, operator memberikan benchmark
+Manifold 30 frame: warm-up 2312,83 ms; stable mean 573,26 ms; p50 516,16 ms;
+p95 674,48 ms; detector mean 544,82 ms; TensorRT mean 158,35 ms; throughput
+1,74 FPS; global-NMS output 3315–3350 dengan center suppression nonaktif.
+Angka ini dicatat sebagai evidence eksternal dan belum direproduksi karena
+SSH/source/engine device tidak tersedia pada audit 3 Agustus.
+
+ONNX tetap format
 pertukaran. Engine harus dibangun pada Manifold 3 yang dituju atau environment
 Linux aarch64, GPU, TensorRT 8.5.2, dan CUDA 11.4 yang identik; engine dari
 Mac, Windows x86, GPU lain, atau versi TensorRT lain tidak dianggap portable.

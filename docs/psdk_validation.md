@@ -17,16 +17,18 @@
   `PIXFMT_RGB_PACKED`.
 - Aplikasi memeriksa `DJI_AIRCRAFT_TYPE_M4E` dan mount
   `DJI_MOUNT_POSITION_TYPE_MANIFOLD3_ONBOARD`.
-- Latest-frame spool bounded: frame pending lama diganti dan counter drop
-  dinaikkan.
+- Callback hanya memvalidasi/copy-replace latest frame. Binary v2 spool,
+  telemetry association, metadata, dan optional rendering berjalan di luar
+  callback pada `/dev/shm`.
 - Telemetry memakai POSITION_FUSED, HEIGHT_RELATIVE, GIMBAL_ANGLES,
-  QUATERNION, dan RTK_POSITION_INFO. Nilai yang gagal dibaca tetap null.
-- Bbox memakai AI recognition metadata terdaftar dan koordinat layar
-  0–10.000.
-- Contour piksel diraster ke AI-rendered RGB, lalu encoder callback mengirim
-  H.264 melalui API payload camera resmi.
-- Widget config menyediakan Start, Stop, detector switch, segmenter switch,
-  Snapshot, status list, dan floating message FPS/latency.
+  QUATERNION, VELOCITY, GPS_SIGNAL_LEVEL, dan RTK_POSITION_INFO. Nilai yang
+  gagal dibaca tetap null.
+- Bbox memakai AI recognition metadata dan koordinat 0–10.000. `boxCount`
+  resmi `uint8_t`; auto limit 255 dan full count tetap di JSONL.
+- Rendered H.264 contour path tersedia di belakang environment gate dan
+  default nonaktif; plant metadata memakai normal Pilot liveview.
+- Widget config menyediakan Start/Stop Live AI, switches, Snapshot, enam state,
+  source/AI FPS, latency/p50, full/sent count, gap N/A, dan error.
 - Shutdown menghentikan stream, callback, thread, subscription, file writer,
   dan core. Stall frame 5 detik memicu stop/start subscription yang terbatas.
 - Identitas portal `ggp-drone-ai` / App ID `189927` divalidasi dari satu file

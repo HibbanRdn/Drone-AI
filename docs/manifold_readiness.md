@@ -1,6 +1,7 @@
 # Readiness build, package, dan upload Manifold 3
 
-Status 31 Juli 2026: **belum siap upload/install DPK**.
+Status 3 Agustus 2026: **source/package flow siap diverifikasi, tetapi belum
+siap upload/install DPK tanpa hardware gates**.
 
 Dokumen ini membedakan development transfer, build target, packaging DPK, dan
 operasi instalasi. Semua command perangkat di bawah adalah prosedur nanti;
@@ -50,17 +51,18 @@ dijalankan:
 
 ```bash
 export PSDK_ROOT="/path/on/manifold/Payload-SDK-3.16.0"
-export GAP_PLOT_AI_APP_ROOT="/home/dji/gap_plot_ai_dev"
+export GAP_PLOT_AI_APP_ROOT="/home/dji/gap_plot_ai_dev/source"
+export GAP_PLOT_AI_SECRETS_FILE="/home/dji/gap_plot_ai_dev/config/secrets.env"
 
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/build_psdk_sample.sh"
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/build_engine.sh"
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/benchmark_engine.sh"
-"$GAP_PLOT_AI_APP_ROOT/source/scripts/build_manifold.sh"
+"$GAP_PLOT_AI_APP_ROOT/scripts/build_psdk_sample.sh"
+"$GAP_PLOT_AI_APP_ROOT/scripts/build_engine.sh"
+"$GAP_PLOT_AI_APP_ROOT/scripts/benchmark_engine.sh"
+"$GAP_PLOT_AI_APP_ROOT/scripts/build_manifold.sh"
 ```
 
 Hasil native yang diharapkan adalah
-`$GAP_PLOT_AI_APP_ROOT/build/bin/gap_plot_ai`. Hasil engine harus tetap berada
-di `runtime/models` dan memiliki build report/checksum.
+`$GAP_PLOT_AI_APP_ROOT/build/bin/gap_plot_ai`. Hasil engine mengikuti
+`models.*.engine_path` pada config dan memiliki build report/checksum.
 
 Build dari laptop hanya sah bila laptop menggunakan Linux cross-toolchain
 aarch64 yang kompatibel dengan GCC 9.4 dan sysroot target. macOS ARM64 bukan
@@ -68,7 +70,9 @@ Linux aarch64 dan tidak menghasilkan binary Manifold yang valid.
 
 ## Gate package DPK
 
-`scripts/build_dpk.sh` masih sengaja gagal. Jangan membuka blokir sampai semua
+`scripts/build_dpk.sh` sekarang membangun staging/package hanya setelah semua
+gate berikut tersedia; pada kondisi saat ini command tetap gagal dengan
+dependency/gate yang spesifik. Jangan membuat marker sampai semua
 syarat berikut terpenuhi:
 
 - official sample, PSDK activation, M4E liveview, widget, telemetry, parity,
@@ -76,30 +80,31 @@ syarat berikut terpenuhi:
 - `ver_min` dan `ver_max` diambil dari versi firmware package Manifold yang
   benar, bukan kernel/L4T atau App ID;
 - `app.json` final menunjuk binary dan config yang benar melalui path relatif;
-- seluruh dependency runtime dapat dipaketkan sesuai aturan DJI: third-party
-  library statis dan file runtime memakai path relatif;
-- arsitektur Python/Ultralytics saat ini diganti atau dibuktikan melalui
-  mekanisme packaging resmi DJI; menyalin venv/dynamic wheel ke DPK tidak
-  dianggap valid;
+- seluruh dependency runtime target ada di bundle yang telah diuji di
+  Manifold; wheel/venv host tidak boleh disalin;
+- `payload/python`, native bridge, engine, dan config lolos readback staging;
 - DPK kandidat serta satu DPK last-known-good memiliki checksum.
 
-Setelah gate tersebut selesai dan staging package sudah diimplementasikan,
-tool resmi yang digunakan adalah:
+Setelah gate tersebut selesai, `scripts/package_dpk.sh` menyiapkan staging
+`payload/`, memvalidasi engine/config, lalu memanggil tool resmi. Tool resmi
+menerima **output directory**, bukan nama file:
 
 ```bash
 bash "$PSDK_ROOT/tools/build_dpk/build_dpk.sh" \
   -i "$GAP_PLOT_AI_APP_ROOT/dpk/staging/app.json" \
-  -o "$GAP_PLOT_AI_APP_ROOT/dpk/build/ggp-drone-ai_v00.01.00.00.dpk"
+  -o "$GAP_PLOT_AI_APP_ROOT/dpk/build"
 ```
 
-Command di atas belum dapat dijalankan pada struktur saat ini karena staging
-final belum dibuat.
+Output yang divalidasi script adalah
+`dpk/build/ggp-drone-ai_v00.01.00.00.dpk` beserta SHA-256. Build final belum
+dijalankan karena host bukan Linux aarch64 dan gate perangkat belum tersedia.
 
 ## Upload dan install nanti
 
 Source atau hasil build Linux dikirim dari laptop melalui SSH/SCP. Pilot 2
-digunakan untuk validasi status, widget, dan liveview—bukan untuk upload source.
-Aircraft bukan target penyalinan source melalui SD card.
+digunakan untuk instalasi DPK/application management serta validasi status,
+widget, dan liveview—bukan untuk upload source. Aircraft bukan target
+penyalinan source melalui SD card.
 
 Setelah DPK benar-benar lulus gate:
 

@@ -17,14 +17,15 @@ from .schema import FrameResult, ModelOutput, Telemetry
 from .state import AppState, StateMachine
 from .storage import SessionWriter
 from .tiling import predict_tiled_detector
+from .tensorrt_backend import DirectTensorRTModel
 
 
 class InferenceRuntime:
     """Persistent model lifecycle shared by live and offline frontends.
 
     Model objects survive Start/Stop cycles. A new bounded session writer is
-    created for each Start, while TensorRT/Ultralytics objects are loaded and
-    warmed only once per worker process.
+    created for each Start, while the direct TensorRT or host-only Ultralytics
+    backend is loaded and warmed only once per worker process.
     """
 
     def __init__(
@@ -37,7 +38,9 @@ class InferenceRuntime:
     ) -> None:
         self.config = config
         self.backend = backend
-        self._model_factory = model_factory or UltralyticsModel
+        self._model_factory = model_factory or (
+            DirectTensorRTModel if backend == "engine" else UltralyticsModel
+        )
         self.state_machine = StateMachine(state_callback)
         self.detector: Optional[Any] = None
         self.segmenter: Optional[Any] = None
@@ -93,7 +96,11 @@ class InferenceRuntime:
                 raise RuntimeError("runtime sudah di-shutdown")
             if self._models_initialized:
                 return
-            self._device = select_device(str(self.config["runtime"]["device"]))
+            self._device = (
+                "cuda:0"
+                if self.backend == "engine"
+                else select_device(str(self.config["runtime"]["device"]))
+            )
             detector_config = self.config["models"]["detector"]
             segmenter_config = self.config["models"]["segmenter"]
             detector = None

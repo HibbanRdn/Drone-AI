@@ -44,6 +44,29 @@ def test_letterbox_coordinate_reversal_round_trip() -> None:
     np.testing.assert_allclose(restored, source_box, atol=1e-5)
 
 
+def test_non_square_landscape_preprocessing_and_padding() -> None:
+    image = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    tensor, meta = preprocess_rgb_chw(image, (1024, 1024))
+    assert tensor.shape == (1, 3, 1024, 1024)
+    assert meta.source_width == 1920 and meta.source_height == 1080
+    assert meta.pad_left == 0 and meta.pad_top == 224
+
+
+def test_non_square_portrait_round_trip_at_frame_edges() -> None:
+    image = np.zeros((1920, 1080, 3), dtype=np.uint8)
+    _, meta = letterbox(image, (640, 960))
+    source_box = (0.0, 0.0, 1080.0, 1920.0)
+    boxed = (
+        source_box[0] * meta.scale + meta.pad_left,
+        source_box[1] * meta.scale + meta.pad_top,
+        source_box[2] * meta.scale + meta.pad_left,
+        source_box[3] * meta.scale + meta.pad_top,
+    )
+    restored = reverse_letterbox_bbox(boxed, meta)
+    assert restored is not None
+    np.testing.assert_allclose(restored, source_box, atol=1e-5)
+
+
 def test_bbox_clipping_rejects_degenerate_and_nan() -> None:
     assert clip_bbox((-10, -5, 120, 60), 100, 50) == (0.0, 0.0, 100.0, 50.0)
     assert clip_bbox((10, 10, 5, 5), 100, 100) is None

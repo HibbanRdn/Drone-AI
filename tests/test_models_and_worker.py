@@ -148,6 +148,46 @@ def test_worker_decodes_rgb_frame_and_null_telemetry(tmp_path: Path) -> None:
     assert envelope.telemetry.aircraft_latitude is None
 
 
+def test_worker_decodes_rgb_frame_with_row_padding(tmp_path: Path) -> None:
+    width, height = 2, 2
+    packed_stride = width * 3
+    row_stride = packed_stride + 2
+    rgb_rows = np.asarray(
+        [
+            [255, 0, 0, 0, 255, 0, 99, 99],
+            [0, 0, 255, 255, 255, 255, 88, 88],
+        ],
+        dtype=np.uint8,
+    )
+    data = rgb_rows.tobytes()
+    header = FRAME_HEADER.pack(
+        MAGIC,
+        FRAME_HEADER_VERSION,
+        5,
+        10,
+        43,
+        2_000,
+        1_700_000_000_000_000_001,
+        2_001,
+        width,
+        height,
+        row_stride,
+        3,
+        len(data),
+        *([0.0] * 14),
+        -1,
+        -1,
+        0,
+        0,
+    )
+    path = tmp_path / "latest_frame.rgb"
+    path.write_bytes(header + data)
+    envelope = read_frame(path)
+    assert envelope.metadata.row_stride == row_stride
+    assert envelope.frame_bgr.shape == (height, width, 3)
+    np.testing.assert_array_equal(envelope.frame_bgr[0, 0], [0, 0, 255])
+
+
 def test_worker_associates_telemetry_with_monotonic_frame_timestamp(
     tmp_path: Path,
 ) -> None:

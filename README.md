@@ -7,8 +7,10 @@ Status repository 3 Agustus 2026:
 - `model_export_ready`: ya
 - `hardware_inventory_ready`: ya
 - `offline_tensorrt_baseline_reported`: ya (source device belum tersinkron)
-- `psdk_blocked`: ya
+- `psdk_3_16_source_aligned`: ya
+- `psdk_live_hardware_blocked`: ya
 - `live_ai_runtime_blocked`: ya
+- `offline_package_generator_ready`: ya (final package menunggu approved commit)
 - `on_device_validated`: tidak
 - `dpk_ready`: tidak
 
@@ -35,7 +37,7 @@ tools/b0_manual_v1_video_demo; hasilnya tidak diklaim sebagai output live PSDK.
 ## Clone sampai dev-run
 
 Semua source, model, config, exporter, TensorRT builder, PSDK frontend,
-identitas aplikasi PSDK, dan source post-processing berada di repository.
+template identitas aplikasi PSDK, dan source post-processing berada di repository.
 Raw dataset/video, environment privat lain, cache, dan output runtime tetap
 lokal.
 
@@ -82,7 +84,7 @@ M4E_VIS decoded RGB callback (PSDK 3.16)
   -> binary v2 spool on /dev/shm (capacity 1)
   -> persistent Python/TensorRT worker
      -> native-resolution tile 1024 / overlap 128
-     -> TorchVision CUDA global NMS, center suppression off
+     -> OpenCV native global NMS untuk live, center suppression off
   -> full JSONL + frame-associated PSDK telemetry
   -> confidence-ranked PSDK metadata subset (auto ABI limit 255)
   -> normal Pilot 2 liveview + DEV widget status/metrics
@@ -122,29 +124,19 @@ dibangun dan divalidasi di Manifold 3/target identik.
 
 ## Baseline dan audit Manifold
 
-Inventory read-only terbaru mengonfirmasi Ubuntu 20.04.6 aarch64 pada NVIDIA
+Baseline target mengonfirmasi Ubuntu 20.04.6 aarch64 pada NVIDIA
 Orin NX, Python 3.8.10, GCC 9.4, CMake 3.16.3, CUDA 11.4, cuDNN 8.6,
-TensorRT 8.5.2, serta sekitar 8,7 GiB ruang kosong. `cv2` aktif adalah 4.5.4
-dari `/usr/local`; ONNX, PyTorch, dan Ultralytics belum tersedia.
-`dji_app_ctl` hanya menampilkan aplikasi resmi DJI `Smart3DExplore`;
-`gap_plot_ai` belum terpasang.
+TensorRT 8.5.2.2 dan OpenCV 4.5.4. Runtime live langsung memakai TensorRT,
+CUDA Runtime, NumPy, dan OpenCV; PyTorch/Ultralytics bukan dependency live.
 
-Untuk mengulang inventory setelah laptop mempunyai interface debug
-`192.168.42.x`:
-
-```bash
-export MANIFOLD_SSH_TARGET="dji@192.168.42.120"
-mkdir -p runtime/reports
-ssh -o ConnectTimeout=30 "$MANIFOLD_SSH_TARGET" \
-  'bash -s' < scripts/manifold_inventory_readonly.sh \
-  | tee runtime/reports/manifold_inventory_raw.txt
-```
+Inventory berikutnya dijalankan dari PC Windows melalui paket offline yang
+terverifikasi; Mac tidak melakukan SSH/deploy. Lihat
+`docs/OFFLINE_DEPLOY_WINDOWS.md` dan `docs/MANIFOLD_FIRST_RUN.md`.
 
 `bootstrap_dev.sh` adalah bootstrap host Python 3.10–3.12 dan sengaja
-memblokir Linux aarch64. Source runtime mendukung Python 3.8, tetapi wheel
-NumPy/OpenCV/PyTorch/Ultralytics target harus diaudit terhadap aarch64,
-JetPack/L4T, CUDA 11.4, dan TensorRT 8.5.2 sebelum instalasi. Tidak ada
-dependency atau aplikasi yang dipasang pada Manifold dalam audit ini.
+memblokir Linux aarch64. Source runtime mendukung Python 3.8; NumPy, OpenCV,
+CUDA, dan TensorRT memakai instalasi system image yang diaudit. Paket hanya
+menambahkan wheel PyYAML CPython 3.8 Linux aarch64 yang hash-nya dikunci.
 
 Preflight target yang tidak menginstal apa pun:
 
@@ -153,11 +145,12 @@ Preflight target yang tidak menginstal apa pun:
 .venv/bin/python scripts/check_manifold_ai_runtime.py --phase runtime
 ```
 
-Identitas aplikasi PSDK berada di `config/dji_sdk_app_info.h` dan ikut dalam
-repository privat serta Git bundle offline. Build aplikasi dan sample resmi
-memakai header yang sama, sehingga Windows dan Manifold tidak memerlukan file
-`.env` atau provisioning credential terpisah. Source DJI tetap tidak diubah;
-sample resmi menerima salinan sementara header melalui compiler `-include`.
+Repository hanya melacak `config/dji_sdk_app_info.example.h`. Nilai nyata
+berada di `config/dji_sdk_app_info.local.h` yang di-ignore dan mode `0600`.
+Generator paket menyalin header itu ke staging paket (bukan source snapshot
+atau riwayat Git), lalu installer memasangnya otomatis. Build aplikasi dan
+sample resmi memakai header lokal yang sama. Source DJI tetap tidak diubah;
+sample resmi menerima header melalui compiler `-include`.
 
 ## Gate sample resmi PSDK
 
@@ -185,32 +178,28 @@ tersebut:
   --official-sample-liveview-and-widget-passed
 ```
 
-## Build, engine, dan runtime Manifold
+## Validasi engine dan runtime Manifold
 
 Command berikut adalah langkah nanti setelah dependency target dan gate sample
-resmi lulus; belum dijalankan. TensorRT FP16 hanya dibangun pada Manifold atau
-environment target identik:
+resmi lulus; belum dijalankan. Engine existing hanya diinspeksi read-only:
 
 ```bash
 export PSDK_ROOT="/path/on/manifold/Payload-SDK-3.16.0"
 export GAP_PLOT_AI_APP_ROOT="/home/dji/gap_plot_ai_dev/source"
 
-"$GAP_PLOT_AI_APP_ROOT/scripts/build_engine.sh"
-"$GAP_PLOT_AI_APP_ROOT/scripts/benchmark_engine.sh"
-"$GAP_PLOT_AI_APP_ROOT/scripts/parity.sh" \
-  "/path/to/representative_test.mp4" engine 0 15 30
+export GAP_PLOT_AI_DETECTOR_ENGINE_PATH=\
+  /home/dji/gap_plot_ai_assets/models/engine/plant_center_detector.engine
+"$GAP_PLOT_AI_APP_ROOT/scripts/validate_engine_readonly.sh"
 "$GAP_PLOT_AI_APP_ROOT/scripts/build_manifold.sh"
 ```
 
-Setiap operasi melakukan preflight ruang kosong. Default minimum 1 GiB untuk
-build/export/engine dan 1,5 GiB untuk runtime; dapat dinaikkan melalui variable
-environment yang didokumentasikan script. Build engine memakai TensorRT
-runtime dan tidak mewajibkan `nvcc`. ONNX adalah format pertukaran; engine dari
-macOS, Windows x86, GPU lain, CUDA lain, atau TensorRT lain tidak digunakan.
+Validasi menghitung hash sebelum/sesudah deserialisasi dan tidak menjalankan
+build/refit/serialize engine. Engine dari macOS, Windows x86, GPU lain, CUDA
+lain, atau TensorRT lain tidak digunakan.
 
-`deploy_dev.sh` mentransfer source termasuk header identitas aplikasi yang
-committed; tidak ada transfer `.env` terpisah. Runtime native memakai identitas
-yang dikompilasi serta membuat `data/logs` dan direktori IPC sebelum
+Paket offline membawa header identitas di area credential terpisah dengan mode
+`0600`; installer menempatkannya tanpa meminta `.env`. Runtime native memakai
+identitas yang dikompilasi serta membuat `data/logs` dan direktori IPC sebelum
 `DjiCore_Init`. Runtime:
 
 ```bash
@@ -225,8 +214,8 @@ yang dikompilasi serta membuat `data/logs` dan direktori IPC sebelum
 `dpk/app.json.in` adalah template sumber, bukan package siap instal.
 `scripts/build_dpk.sh` mempunyai gate nyata dan gagal jelas sampai sample resmi, liveview, engine
 FP16, parity, ground test, versi firmware untuk `ver_min/ver_max`, serta
-strategi dependency statis DPK yang didukung DJI lulus. Worker
-Python/Ultralytics saat ini belum dapat dianggap dependency DPK yang valid.
+strategi dependency statis DPK yang didukung DJI lulus. Bundle runtime Python
+target belum dapat dianggap dependency DPK yang valid sebelum readback device.
 Tidak ada DPK yang dibuat atau diinstal.
 
 Setelah gate DPK benar-benar lulus, command resmi pengelolaan aplikasi adalah

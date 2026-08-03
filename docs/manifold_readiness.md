@@ -20,18 +20,16 @@ belum dijalankan dalam audit.
 - runtime membuat `data/logs` serta `runtime/ipc`, `runtime/reports`, dan
   session bounded;
 - build/engine/runtime melakukan preflight kapasitas disk;
-- report, credential tambahan, build output, dan DPK tetap ignored Git;
-  identitas aplikasi PSDK sudah committed, model PT/ONNX wajib tersedia melalui
-  Git LFS, sedangkan engine ditambahkan setelah build target.
+- report, credential, build output, dan DPK tetap ignored Git; template PSDK
+  dilacak, header nyata hanya berada di staging paket; engine existing tetap
+  di path protected Manifold.
 
 ## Blocker sebelum build AI
 
-- ONNX, PyTorch, dan Ultralytics belum tersedia pada Manifold;
-- kompatibilitas wheel target dengan Python 3.8/aarch64/CUDA 11.4 belum
-  dibuktikan;
-- ONNX kedua model sudah tersedia melalui Git LFS dan checksum-nya diverifikasi;
-- engine FP16 belum dibangun dan belum diuji;
-- aktivasi identitas aplikasi PSDK committed belum diuji pada hardware.
+- system NumPy/OpenCV/TensorRT/CUDA harus lolos preflight path dan versi;
+- protected engine belum diinspeksi binding/hash secara read-only;
+- direct TensorRT/OpenCV NMS belum dibandingkan dengan baseline device;
+- aktivasi identitas aplikasi PSDK belum diuji pada hardware.
 
 Setelah dependency target disiapkan secara terpisah dan disetujui operator,
 jalankan preflight read-only pada Manifold:
@@ -54,14 +52,13 @@ export PSDK_ROOT="/path/on/manifold/Payload-SDK-3.16.0"
 export GAP_PLOT_AI_APP_ROOT="/home/dji/gap_plot_ai_dev/source"
 
 "$GAP_PLOT_AI_APP_ROOT/scripts/build_psdk_sample.sh"
-"$GAP_PLOT_AI_APP_ROOT/scripts/build_engine.sh"
-"$GAP_PLOT_AI_APP_ROOT/scripts/benchmark_engine.sh"
+"$GAP_PLOT_AI_APP_ROOT/scripts/validate_engine_readonly.sh"
 "$GAP_PLOT_AI_APP_ROOT/scripts/build_manifold.sh"
 ```
 
 Hasil native yang diharapkan adalah
-`$GAP_PLOT_AI_APP_ROOT/build/bin/gap_plot_ai`. Hasil engine mengikuti
-`models.*.engine_path` pada config dan memiliki build report/checksum.
+`$GAP_PLOT_AI_APP_ROOT/build/bin/gap_plot_ai`. Engine tidak dibuat atau ditulis
+oleh alur ini; laporan inspeksi mencatat binding/hash/ukuran.
 
 Build dari laptop hanya sah bila laptop menggunakan Linux cross-toolchain
 aarch64 yang kompatibel dengan GCC 9.4 dan sysroot target. macOS ARM64 bukan

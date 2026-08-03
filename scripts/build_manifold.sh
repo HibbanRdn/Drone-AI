@@ -6,7 +6,7 @@ SOURCE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 APP_ROOT="${GAP_PLOT_AI_APP_ROOT:-${SOURCE_ROOT}}"
 PSDK_ROOT="${PSDK_ROOT:?Set PSDK_ROOT ke Payload-SDK 3.16.0 pada Manifold}"
 BUILD_DIR="${APP_ROOT}/build"
-APP_INFO_HEADER="${GAP_PLOT_AI_APP_INFO_HEADER:-${SOURCE_ROOT}/config/dji_sdk_app_info.h}"
+APP_INFO_HEADER="${GAP_PLOT_AI_APP_INFO_HEADER:-${SOURCE_ROOT}/config/dji_sdk_app_info.local.h}"
 PYTHON_BIN="${GAP_PLOT_AI_PYTHON:-python3}"
 
 if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "aarch64" ]]; then
@@ -21,6 +21,7 @@ if [[ ! -f "${APP_INFO_HEADER}" ]]; then
   echo "PSDK app identity header tidak ditemukan: ${APP_INFO_HEADER}" >&2
   exit 3
 fi
+"${PYTHON_BIN}" "${SOURCE_ROOT}/scripts/psdk_app_info.py" "${APP_INFO_HEADER}"
 
 cmake -S "${SOURCE_ROOT}" -B "${BUILD_DIR}" \
   -DPSDK_ROOT="${PSDK_ROOT}" \

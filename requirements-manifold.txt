@@ -1,0 +1,3 @@
+# Manifold 3 uses system-site-packages for numpy, cv2, and tensorrt.
+# Add only audited cp38 Linux aarch64 or pure-Python wheels here.
+PyYAML==6.0.2

@@ -17,6 +17,7 @@ fi
 
 mkdir -p "${IPC_DIR}" "${APP_ROOT}/runtime/logs" "${APP_ROOT}/data/logs"
 export GAP_PLOT_AI_APP_ROOT="${APP_ROOT}"
+export PYTHONPATH="${SOURCE_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 export GAP_PLOT_AI_IPC_DIR="${IPC_DIR}"
 export GAP_PLOT_AI_WIDGET_DIR="${SOURCE_ROOT}/config/widget"
 export GAP_PLOT_AI_STATIC_OVERLAY_DEBUG=1

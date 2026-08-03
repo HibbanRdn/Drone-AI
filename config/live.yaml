@@ -29,7 +29,13 @@ runtime:
 models:
   detector:
     enabled: true
+    engine_path: null
+    engine_dir: /home/dji/gap_plot_ai_assets/models/engine
     enable_center_suppression: false
+    # Native OpenCV NMS avoids a Torch/TorchVision runtime dependency. Device
+    # parity against the previously validated TorchVision result remains a
+    # mandatory Manifold hardware gate and is logged as opencv_native.
+    global_nms_backend: opencv
   segmenter:
     # Plot segmentation is not live gap detection. Keep it off until its
     # resource use and Pilot rendered-stream path pass hardware validation.

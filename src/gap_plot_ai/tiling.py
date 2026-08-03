@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
+import cv2
 
 from .schema import ModelOutput
 
@@ -111,10 +112,39 @@ def box_iou(a: TiledDetection, b: TiledDetection) -> float:
 
 
 def class_aware_nms(
-    detections: List[TiledDetection], iou_threshold: float
+    detections: List[TiledDetection],
+    iou_threshold: float,
+    backend: str = "torchvision",
 ) -> List[TiledDetection]:
     if not detections:
         return []
+    if backend == "opencv":
+        kept: List[TiledDetection] = []
+        class_ids = sorted(set(item.class_id for item in detections))
+        for class_id in class_ids:
+            candidates = [item for item in detections if item.class_id == class_id]
+            indexes = cv2.dnn.NMSBoxes(
+                [
+                    [
+                        item.x1,
+                        item.y1,
+                        item.x2 - item.x1,
+                        item.y2 - item.y1,
+                    ]
+                    for item in candidates
+                ],
+                [item.confidence for item in candidates],
+                score_threshold=0.0,
+                nms_threshold=float(iou_threshold),
+            )
+            if indexes is not None:
+                kept.extend(
+                    candidates[int(index)]
+                    for index in np.asarray(indexes).reshape(-1).tolist()
+                )
+        return sorted(kept, key=lambda item: item.confidence, reverse=True)
+    if backend != "torchvision":
+        raise ValueError("global NMS backend must be torchvision or opencv")
     try:
         import torch
         from torchvision.ops import batched_nms
@@ -172,9 +202,12 @@ def merge_detections(
     center_duplicate_radius_px: float,
     enable_center_suppression: bool,
     max_detections_full_frame: int,
+    global_nms_backend: str = "torchvision",
 ) -> Tuple[List[TiledDetection], Dict[str, Any]]:
     nms_started = time.perf_counter()
-    after_nms = class_aware_nms(detections, global_nms_iou)
+    after_nms = class_aware_nms(
+        detections, global_nms_iou, backend=global_nms_backend
+    )
     global_nms_ms = (time.perf_counter() - nms_started) * 1000
     center_started = time.perf_counter()
     after_center = (
@@ -187,9 +220,13 @@ def merge_detections(
         after_center, key=lambda item: item.confidence, reverse=True
     )[:max_detections_full_frame]
     return final, {
-        "global_nms_backend": "torchvision_cuda"
-        if _torchvision_nms_uses_cuda()
-        else "torchvision_cpu",
+        "global_nms_backend": (
+            "torchvision_cuda"
+            if global_nms_backend == "torchvision" and _torchvision_nms_uses_cuda()
+            else "torchvision_cpu"
+            if global_nms_backend == "torchvision"
+            else "opencv_native"
+        ),
         "global_nms_ms": global_nms_ms,
         "center_suppression_ms": center_suppression_ms,
         "raw_tile_predictions": len(detections),
@@ -272,6 +309,7 @@ def predict_tiled_detector(
         max_detections_full_frame=int(
             detector_config["max_detections_full_frame"]
         ),
+        global_nms_backend=str(detector_config["global_nms_backend"]),
     )
     diagnostics["tile_count"] = len(windows)
     diagnostics["failed_tile_count"] = len(warnings)

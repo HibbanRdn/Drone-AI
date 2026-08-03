@@ -10,8 +10,8 @@ from typing import Any, Dict, List, Tuple
 
 
 PHASE_MODULES = {
-    "engine": ("yaml", "numpy", "cv2", "onnx", "tensorrt", "torch", "ultralytics"),
-    "runtime": ("yaml", "numpy", "cv2", "tensorrt", "torch", "ultralytics"),
+    "engine": ("yaml", "numpy", "cv2", "tensorrt"),
+    "runtime": ("yaml", "numpy", "cv2", "tensorrt"),
 }
 
 
@@ -58,17 +58,6 @@ def compatibility_errors(facts: Dict[str, Dict[str, Any]]) -> List[str]:
         if not tensorrt_fact["version"].startswith("8.5.2"):
             errors.append("TensorRT Python must match audited 8.5.2")
 
-    torch_fact = facts.get("torch")
-    if torch_fact and torch_fact["status"] == "ok":
-        torch_module = torch_fact["module"]
-        cuda_module = getattr(torch_module, "cuda", None)
-        if cuda_module is None or not bool(cuda_module.is_available()):
-            errors.append("PyTorch CUDA must be available")
-        torch_version = getattr(torch_module, "version", None)
-        cuda_version = str(getattr(torch_version, "cuda", "unavailable"))
-        torch_fact["cuda_version"] = cuda_version
-        if not cuda_version.startswith("11.4"):
-            errors.append("PyTorch CUDA must match audited CUDA 11.4")
     return errors
 
 

@@ -43,7 +43,7 @@
 #include "hal_usb_bulk.h"
 
 #ifdef GAP_PLOT_AI_COMPILED_APP_INFO
-#include "dji_sdk_app_info.h"
+#include "dji_sdk_app_info.local.h"
 #endif
 
 namespace {
@@ -949,10 +949,15 @@ void ImageCallback(E_DjiLiveViewCameraPosition, const uint8_t *buffer, uint32_t 
     if (g_stop.load()) {
         return;
     }
-    const uint32_t rowStride = static_cast<uint32_t>(imageInfo.width) * 3U;
-    const uint64_t expected = static_cast<uint64_t>(rowStride) * imageInfo.height;
+    const uint32_t packedStride = static_cast<uint32_t>(imageInfo.width) * 3U;
     if (buffer == nullptr || imageInfo.pixFmt != PIXFMT_RGB_PACKED ||
-        length != expected || expected == 0) {
+        packedStride == 0 || imageInfo.height == 0 ||
+        length % imageInfo.height != 0) {
+        return;
+    }
+    const uint32_t rowStride = length / imageInfo.height;
+    const uint64_t expected = static_cast<uint64_t>(rowStride) * imageInfo.height;
+    if (rowStride < packedStride || length != expected) {
         return;
     }
     const uint64_t arrivalMonotonicNs = MonotonicNs();

@@ -7,10 +7,10 @@ untuk memberi status lulus perangkat.
 
 - [ ] PSDK exact `3.16.0` / commit `9af08536…`.
 - [ ] Firmware aircraft, Pilot 2/RC, camera, dan Manifold dicatat.
-- [ ] CUDA, TensorRT, Torch, TorchVision, OpenCV, engine checksum dicatat.
+- [ ] CUDA, TensorRT, OpenCV, engine checksum dan bindings dicatat.
 - [ ] Device `git rev-parse HEAD` dan `git diff --stat` dicatat tanpa secret.
 - [ ] Config efektif: batch 1, tile 1024, overlap 128, threshold existing,
-      TorchVision CUDA NMS, center suppression false.
+      OpenCV native NMS, center suppression false.
 - [ ] Tidak ada credential, serial number, raw media, engine besar, atau
       runtime session ditambahkan ke Git.
 

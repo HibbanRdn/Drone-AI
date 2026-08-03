@@ -37,7 +37,7 @@ Pilot 2 widget
        -> one detector load + one backend context + one warm-up
        -> native frame tiles 1024 / overlap 128
        -> TensorRT engine
-       -> TorchVision batched global NMS (CUDA when available)
+       -> OpenCV native per-class global NMS (no Torch runtime)
        -> full detections + metrics + telemetry JSONL
        -> confidence-ranked Pilot subset
   -> PSDK AI metadata on normal Pilot liveview
@@ -83,7 +83,7 @@ models:
   detector:
     tile_size: 1024
     tile_overlap: 128
-    global_nms_backend: torchvision
+    global_nms_backend: opencv
     enable_center_suppression: false
   segmenter:
     enabled: false
@@ -121,14 +121,15 @@ tidak dipakai sebagai telemetry live. Offline CLI tetap tersedia:
 Jangan memasang wheel host. Sebelum run, sinkronkan source/artefak yang benar
 dipakai benchmark device:
 
-1. engine tervalidasi ke `models.detector.engine_path`;
+1. engine lama tervalidasi read-only di
+   `/home/dji/gap_plot_ai_assets/models/engine`;
 2. wrapper TensorRT/device yang menghasilkan benchmark;
-3. Torch/TorchVision CUDA yang menyediakan `torchvision.ops.batched_nms`;
-4. checksum engine, input, threshold, tile, overlap, global NMS, dan
+3. metadata binding engine dan decoder output harus cocok dengan kontrak ONNX;
+4. checksum engine, input, threshold, tile, overlap, OpenCV NMS, dan
    `center_suppression=false`;
 5. bukti `model_load_count=1`, `backend_initialization_count=1`,
-   `warmup_count=1`; wrapper menunda validasi metadata class sampai predictor
-   persisten siap agar akses `model.names` tidak membuat backend sementara.
+   `warmup_count=1`; direct runtime membuat satu execution context serta buffer
+   host-pinned/device persisten dan tidak memakai `model.names` Ultralytics.
 
 Environment native untuk timeout, reconnect, heartbeat, dan stale overlay
 dirender dari config tervalidasi oleh `scripts/live_config_env.py`; launcher
@@ -237,9 +238,9 @@ dji_app_ctl start ggp-drone-ai
 
 ## Deployment offline source + PSDK
 
-Generator source-only tersedia di `scripts/create_offline_deployment.py`.
-Generator menolak worktree kotor, sehingga final Git bundle sengaja belum boleh
-dibuat sebelum diff disetujui dan di-commit. Paket final berisi bundle aplikasi,
-bundle exact tag PSDK, manifest commit/size/SHA-256, verifier, installer release
-non-destructive, build script, transfer `scp`, dan rollback symlink. Lihat
-`docs/manifold_offline_deployment.md`.
+Generator tersedia di `scripts/create_offline_deployment.py`. Generator menolak
+worktree kotor, sehingga paket final sengaja belum boleh dibuat sebelum diff
+disetujui dan di-commit. Paket final berisi snapshot aplikasi tanpa history,
+bundle exact tag PSDK, credential staging, wheel target, manifest/SHA-256,
+verifier, installer release non-destructive, build script, transfer `scp`, dan
+rollback symlink. Lihat `docs/OFFLINE_DEPLOY_WINDOWS.md`.

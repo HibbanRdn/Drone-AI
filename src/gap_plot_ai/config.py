@@ -89,14 +89,21 @@ def _resolve_repository_paths(config: Dict[str, Any], repo_root: Path) -> None:
     for model in config.get("models", {}).values():
         if not isinstance(model, dict):
             continue
-        for key in ("path", "onnx_path", "engine_path"):
-            if key in model:
+        for key in ("path", "onnx_path", "engine_path", "engine_dir"):
+            if key in model and model[key]:
                 model[key] = str(_repo_path(model[key], repo_root))
+    detector = config.get("models", {}).get("detector", {})
+    engine_override = os.environ.get("GAP_PLOT_AI_DETECTOR_ENGINE_PATH")
+    if engine_override and isinstance(detector, dict):
+        override_path = Path(engine_override).expanduser()
+        detector["engine_path"] = str(
+            override_path if override_path.is_absolute() else override_path.resolve()
+        )
 
 
 def _repo_path(value: Any, repo_root: Path) -> Path:
     path = Path(str(value)).expanduser()
-    return path.resolve() if path.is_absolute() else (repo_root / path).resolve()
+    return path if path.is_absolute() else (repo_root / path).resolve()
 
 
 def validate_config(
@@ -151,10 +158,10 @@ def validate_config(
                 raise ConfigError(
                     "models.detector.global_nms_iou harus dalam rentang 0..1."
                 )
-            if model.get("global_nms_backend") != "torchvision":
+            if model.get("global_nms_backend") not in {"torchvision", "opencv"}:
                 raise ConfigError(
-                    "models.detector.global_nms_backend harus torchvision; "
-                    "Python NMS lama tidak diizinkan."
+                    "models.detector.global_nms_backend harus torchvision atau "
+                    "opencv native; Python NMS lama tidak diizinkan."
                 )
             if int(model.get("max_detections_full_frame", 0)) < 1:
                 raise ConfigError(

@@ -79,6 +79,16 @@ def test_class_aware_nms_keeps_highest_and_different_class() -> None:
     assert [(item.class_id, item.confidence) for item in kept] == [(0, 0.9), (1, 0.7)]
 
 
+def test_opencv_global_nms_keeps_highest_and_different_class() -> None:
+    detections = [
+        _detection((0, 0, 10, 10), 0.9),
+        _detection((1, 1, 11, 11), 0.8),
+        _detection((1, 1, 11, 11), 0.7, class_id=1),
+    ]
+    kept = class_aware_nms(detections, 0.1, backend="opencv")
+    assert [(item.class_id, item.confidence) for item in kept] == [(0, 0.9), (1, 0.7)]
+
+
 def test_center_suppression_removes_close_center_duplicate() -> None:
     detections = [
         _detection((0, 0, 10, 10), 0.9),

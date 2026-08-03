@@ -67,10 +67,10 @@ Package Python yang terkonfirmasi:
 | PyTorch | belum terpasang |
 | Ultralytics | belum terpasang |
 
-Karena runtime dan builder engine masih mengimpor PyTorch/Ultralytics, kondisi
-ini adalah blocker nyata. Jangan menginstal versi PyPI host secara otomatis.
-Wheel target harus cocok dengan Python 3.8, aarch64, L4T R35.5, CUDA 11.4,
-cuDNN 8.6, dan TensorRT 8.5.2.
+Runtime live direct TensorRT tidak mengimpor PyTorch/Ultralytics/ONNX. NumPy,
+OpenCV, TensorRT, CUDA dan cuDNN berasal dari system image; hanya PyYAML yang
+dipasang dari wheel CPython 3.8 Linux aarch64 dengan SHA-256 terkunci. Export,
+rebuild engine dan Ultralytics tetap di luar deployment live ini.
 
 ## Status aplikasi DJI
 

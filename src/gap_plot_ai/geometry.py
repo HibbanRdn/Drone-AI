@@ -59,7 +59,7 @@ def letterbox(
 
 
 def preprocess_rgb_chw(
-    image_bgr: np.ndarray, target_size: int
+    image_bgr: np.ndarray, target_size: Union[int, Tuple[int, int]]
 ) -> Tuple[np.ndarray, LetterboxMeta]:
     padded, meta = letterbox(image_bgr, target_size)
     rgb = cv2.cvtColor(padded, cv2.COLOR_BGR2RGB)

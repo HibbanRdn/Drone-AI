@@ -30,6 +30,7 @@ mkdir -p \
   "${IPC_DIR}" "${PID_DIR}" "${REPORT_DIR}" \
   "${APP_ROOT}/runtime/logs" "${APP_ROOT}/data/logs"
 export GAP_PLOT_AI_APP_ROOT="${APP_ROOT}"
+export PYTHONPATH="${SOURCE_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 export PLOT_GAP_ROOT="${PLOT_GAP_ROOT:-${APP_ROOT}}"
 export GAP_PLOT_AI_IPC_DIR="${IPC_DIR}"
 export GAP_PLOT_AI_WIDGET_DIR="${SOURCE_ROOT}/config/widget"

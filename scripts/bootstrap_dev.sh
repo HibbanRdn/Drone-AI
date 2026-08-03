@@ -28,4 +28,4 @@ fi
 "${APP_ROOT}/.venv/bin/python" -c \
   "from gap_plot_ai.config import load_config; load_config('${APP_ROOT}/config/app.yaml'); print('config_ok')"
 echo "Venv siap: ${APP_ROOT}/.venv"
-echo "Identitas aplikasi PSDK tersedia di config/dji_sdk_app_info.h."
+echo "Template PSDK tersedia; nilai lokal harus berada di config/dji_sdk_app_info.local.h."

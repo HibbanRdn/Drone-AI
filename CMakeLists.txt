@@ -16,7 +16,7 @@ endif()
 if(NOT DEFINED GAP_PLOT_AI_APP_INFO_HEADER OR
    GAP_PLOT_AI_APP_INFO_HEADER STREQUAL "")
   set(GAP_PLOT_AI_APP_INFO_HEADER
-      "${CMAKE_CURRENT_SOURCE_DIR}/config/dji_sdk_app_info.h")
+      "${CMAKE_CURRENT_SOURCE_DIR}/config/dji_sdk_app_info.local.h")
 endif()
 
 get_filename_component(PSDK_ROOT "${PSDK_ROOT}" REALPATH)

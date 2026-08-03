@@ -18,8 +18,9 @@ Audit terakhir 3 Agustus 2026.
 
 Yang sengaja tidak masuk:
 
-- credential tambahan dan environment privat; identitas aplikasi PSDK yang
-  diperlukan untuk build offline berada di `config/dji_sdk_app_info.h`;
+- credential dan environment privat; repository hanya memuat
+  `config/dji_sdk_app_info.example.h`, sedangkan header lokal di-ignore dan
+  baru disalin ke staging paket mode `0600`;
 - virtualenv atau dependency terinstal;
 - raw training dataset, raw flight video/SRT;
 - runtime cache, log, report, IPC, preview, dan temporary inference output;
@@ -27,8 +28,8 @@ Yang sengaja tidak masuk:
 
 Nilai yang belum diketahui atau belum tervalidasi:
 
-- TensorRT engine checksum/size/parity/benchmark, karena engine wajib dibuat
-  pada Manifold 3 atau target identik;
+- TensorRT engine checksum/size/binding/parity aktual pada protected engine
+  Manifold;
 - versi firmware package untuk DPK ver_min/ver_max;
 - readback packaging resmi seluruh dependency runtime Python target pada
   Manifold/Pilot 2;

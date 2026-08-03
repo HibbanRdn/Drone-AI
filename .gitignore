@@ -4,6 +4,7 @@
 !.env.example
 config/secrets.env
 config/*.secret.*
+config/dji_sdk_app_info.local.h
 
 # Python environments and caches
 .venv/

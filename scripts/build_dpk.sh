@@ -15,6 +15,7 @@ if [[ "${1:-}" == "--check" ]]; then
     "dpk_template=${SOURCE_ROOT}/dpk/app.json.in" \
     "native_binary=${APP_ROOT}/build/bin/gap_plot_ai" \
     "runtime_bundle=${APP_ROOT}/runtime/dpk_bundle" \
+    "external_engine_dir=/home/dji/gap_plot_ai_assets/models/engine" \
     "gate_psdk=${APP_ROOT}/runtime/gates/psdk_liveview_verified" \
     "gate_engine=${APP_ROOT}/runtime/gates/engine_parity_verified" \
     "gate_ground=${APP_ROOT}/runtime/gates/ground_test_verified" \
@@ -38,7 +39,6 @@ fi
 required_paths=(
   "${APP_ROOT}/build/bin/gap_plot_ai"
   "${APP_ROOT}/runtime/dpk_bundle/python/bin/python3"
-  "${APP_ROOT}/runtime/dpk_bundle/models/plant_detector.engine"
   "${APP_ROOT}/runtime/gates/psdk_liveview_verified"
   "${APP_ROOT}/runtime/gates/engine_parity_verified"
   "${APP_ROOT}/runtime/gates/ground_test_verified"
@@ -65,9 +65,10 @@ install -m 0755 "${SOURCE_ROOT}/scripts/dpk_launcher.sh" \
   "${STAGING}/bin/gap_plot_ai_launcher"
 install -m 0755 "${SOURCE_ROOT}/scripts/live_config_env.py" \
   "${STAGING}/payload/bin/live_config_env.py"
-mkdir -p "${STAGING}/payload/models/engine"
-mv "${STAGING}/payload/models/plant_detector.engine" \
-  "${STAGING}/payload/models/engine/plant_center_manual_v1_b0_tensorrt-8.5.2_cuda-11.4_aarch64_fp16.engine"
+if find "${STAGING}" -type f -name '*.engine' -print -quit | grep -q .; then
+  echo "DPK staging must not contain TensorRT engines; use the protected Manifold engine directory." >&2
+  exit 5
+fi
 cp "${SOURCE_ROOT}/config/live.yaml" "${STAGING}/payload/share/config/live.yaml"
 cp "${SOURCE_ROOT}/config/app.yaml" "${STAGING}/payload/share/config/app.yaml"
 cp -R "${SOURCE_ROOT}/config/widget" "${STAGING}/payload/share/config/widget"
@@ -83,7 +84,7 @@ python3 "${SOURCE_ROOT}/scripts/validate_dpk.py" \
 GAP_PLOT_AI_APP_ROOT="${STAGING}/payload" \
   GAP_PLOT_AI_RUNTIME_ROOT="${STAGING}/data/runtime" \
   "${STAGING}/payload/python/bin/python3" -c \
-  'from gap_plot_ai.config import load_config; from gap_plot_ai.models import resolve_backend_path; c=load_config("'"${STAGING}"'/payload/share/config/live.yaml"); p=resolve_backend_path(c["models"]["detector"], "engine"); assert p.is_file(), p; print(f"dpk_engine_path={p}")'
+  'from gap_plot_ai.config import load_config; c=load_config("'"${STAGING}"'/payload/share/config/live.yaml"); d=c["models"]["detector"]; assert d.get("engine_path") in (None, ""), d.get("engine_path"); assert d["engine_dir"] == "/home/dji/gap_plot_ai_assets/models/engine"; print("dpk_engine_dir=/home/dji/gap_plot_ai_assets/models/engine")'
 
 bash "${PSDK_ROOT}/tools/build_dpk/build_dpk.sh" \
   -i "${STAGING}/app.json" -o "${OUTPUT_DIR}"

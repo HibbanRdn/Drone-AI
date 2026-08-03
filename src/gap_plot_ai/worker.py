@@ -99,15 +99,19 @@ def read_frame(path: Path) -> FrameEnvelope:
     if magic != MAGIC or header_version != FRAME_HEADER_VERSION or channels != 3:
         raise ValueError("magic/version/pixel channels spool tidak valid")
     packed_stride = int(width) * int(channels)
-    if row_stride != packed_stride:
+    if row_stride < packed_stride:
         raise ValueError(
-            f"row stride belum didukung: diterima={row_stride}, packed={packed_stride}"
+            f"row stride lebih kecil dari packed RGB: diterima={row_stride}, "
+            f"packed={packed_stride}"
         )
     expected = int(row_stride) * int(height)
     if data_len != expected or len(payload) != FRAME_HEADER.size + expected:
         raise ValueError("ukuran RGB spool tidak konsisten")
-    rgb = np.frombuffer(payload, dtype=np.uint8, offset=FRAME_HEADER.size)
-    rgb = rgb.reshape((height, width, channels))
+    rgb_rows = np.frombuffer(payload, dtype=np.uint8, offset=FRAME_HEADER.size)
+    rgb_rows = rgb_rows.reshape((height, row_stride))
+    rgb = np.ascontiguousarray(rgb_rows[:, :packed_stride]).reshape(
+        (height, width, channels)
+    )
     frame_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     pixel_format_name = (
         "PIXFMT_RGB_PACKED" if int(pixel_format) == 5 else f"PSDK_PIXFMT_{pixel_format}"

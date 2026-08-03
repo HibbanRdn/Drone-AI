@@ -49,6 +49,7 @@ def test_live_config_extends_baseline_without_second_threshold_source() -> None:
     assert live["models"]["detector"]["tile_size"] == base["models"]["detector"]["tile_size"]
     assert live["models"]["detector"]["confidence_threshold"] == base["models"]["detector"]["confidence_threshold"]
     assert live["models"]["detector"]["enable_center_suppression"] is False
+    assert live["models"]["detector"]["global_nms_backend"] == "opencv"
     assert live["live"]["input_mode"] == "decoded_rgb"
     assert live["live"]["decoded_pixel_format"] == "RGB_PACKED"
     assert live["live"]["h264_fallback"]["enabled"] is False
@@ -65,8 +66,10 @@ def test_config_uses_explicit_application_root_for_packaged_runtime(
     config = load_config(root / "config/live.yaml")
     assert config["_repo_root"] == str(packaged_root.resolve())
     assert config["runtime"]["root"] == str((packaged_root / "runtime").resolve())
-    assert config["models"]["detector"]["engine_path"].startswith(
-        str((packaged_root / "models").resolve())
+    assert config["models"]["detector"]["engine_path"] is None
+    assert (
+        config["models"]["detector"]["engine_dir"]
+        == "/home/dji/gap_plot_ai_assets/models/engine"
     )
 
 
@@ -81,7 +84,7 @@ def test_config_uses_writable_runtime_override(tmp_path: Path, monkeypatch) -> N
 def test_config_rejects_python_global_nms(config_dict: dict) -> None:
     config = deepcopy(config_dict)
     config["models"]["detector"]["global_nms_backend"] = "python"
-    with pytest.raises(ConfigError, match="TorchVision|torchvision"):
+    with pytest.raises(ConfigError, match="torchvision atau opencv"):
         validate_config(config)
 
 

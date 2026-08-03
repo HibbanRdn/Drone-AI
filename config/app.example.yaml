@@ -69,6 +69,10 @@ models:
       precision: FP16
       dynamic: false
       workspace_gib: 2
+      output_decoder: ultralytics_v8_xywh_class_scores
+      expected_bindings:
+        images: [1, 3, 1024, 1024]
+        output0: [1, 5, 21504]
   segmenter:
     enabled: true
     path: models/source/plot_segmenter_b4_selected_best.pt

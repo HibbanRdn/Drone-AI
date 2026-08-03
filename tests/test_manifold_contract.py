@@ -38,23 +38,17 @@ def test_cmake_contract_matches_manifold_inventory() -> None:
     assert "aarch64-linux-gnu-gcc/libpayloadsdk.a" in cmake
     assert "target_compile_features(gap_plot_ai PRIVATE cxx_std_17)" in cmake
     assert 'DEFINED ENV{PSDK_ROOT}' in cmake
-    assert "config/dji_sdk_app_info.h" in cmake
+    assert "config/dji_sdk_app_info.local.h" in cmake
 
 
-def test_committed_psdk_identity_is_complete() -> None:
-    header = (APP_ROOT / "config/dji_sdk_app_info.h").read_text(encoding="utf-8")
-    expected_lengths = {
-        "USER_APP_NAME": 12,
-        "USER_APP_ID": 6,
-        "USER_APP_KEY": 31,
-        "USER_APP_LICENSE": 88,
-        "USER_DEVELOPER_ACCOUNT": 19,
-        "USER_BAUD_RATE": 6,
-    }
-    for macro, expected_length in expected_lengths.items():
-        match = re.search(r'#define\s+{}\s+"([^"]+)"'.format(macro), header)
-        assert match is not None
-        assert len(match.group(1)) == expected_length
+def test_only_placeholder_psdk_identity_is_tracked() -> None:
+    example = (APP_ROOT / "config/dji_sdk_app_info.example.h").read_text(
+        encoding="utf-8"
+    )
+    assert "REPLACE_WITH" in example
+    assert not (APP_ROOT / "config/dji_sdk_app_info.h").exists()
+    ignored = (APP_ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "config/dji_sdk_app_info.local.h" in ignored
 
 
 def test_psdk_callback_only_replaces_latest_frame() -> None:
@@ -84,5 +78,35 @@ def test_official_sample_build_does_not_dirty_vendor_checkout() -> None:
     script = (APP_ROOT / "scripts/build_psdk_sample.sh").read_text(encoding="utf-8")
     assert "${APP_ROOT}/build/official_psdk_sample_3.16.0" in script
     assert "${PSDK_ROOT}/build_manifold3_official" not in script
-    assert "config/dji_sdk_app_info.h" in script
-    assert "psdk_credentials.py" not in script
+    assert "config/dji_sdk_app_info.local.h" in script
+    assert "psdk_app_info.py" in script
+
+
+def test_windows_deployer_verifies_new_package_without_network_installers() -> None:
+    script = (APP_ROOT / "scripts/deploy_manifold_windows.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert '$env:OS -ne "Windows_NT"' in script
+    assert "[string]$PackagePath" in script
+    assert "verify_offline_archive.py" in script
+    assert "Get-FileHash -Algorithm SHA256" in script
+    assert "gap_plot_ai_offline_21f56625f908_20260803T090552Z" in script
+    assert "BatchMode=yes" in script and "scp" in script
+    assert "Invoke-WebRequest" not in script
+    assert "sudo" not in script
+    assert "s3" not in script.lower()
+
+
+def test_dpk_build_uses_external_read_only_engine_directory() -> None:
+    script = (APP_ROOT / "scripts/build_dpk.sh").read_text(encoding="utf-8")
+    assert "/home/dji/gap_plot_ai_assets/models/engine" in script
+    assert "plant_detector.engine" not in script
+    assert "mv \"${STAGING}/payload/models" not in script
+    assert "staging must not contain TensorRT engines" in script
+
+
+def test_legacy_worktree_deployer_is_fail_closed() -> None:
+    script = (APP_ROOT / "scripts/deploy_dev.sh").read_text(encoding="utf-8")
+    assert "Direct working-tree deployment is disabled" in script
+    assert "ssh " not in script and "scp " not in script
+    assert "tar -" not in script

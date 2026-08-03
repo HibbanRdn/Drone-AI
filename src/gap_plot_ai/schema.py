@@ -22,9 +22,23 @@ class Telemetry:
     relative_altitude: Optional[float] = None
     absolute_altitude: Optional[float] = None
     gimbal_pitch: Optional[float] = None
+    gimbal_roll: Optional[float] = None
+    gimbal_yaw: Optional[float] = None
+    aircraft_roll: Optional[float] = None
+    aircraft_pitch: Optional[float] = None
+    aircraft_yaw: Optional[float] = None
     aircraft_heading: Optional[float] = None
+    velocity_x: Optional[float] = None
+    velocity_y: Optional[float] = None
+    velocity_z: Optional[float] = None
+    speed_mps: Optional[float] = None
+    gps_signal_level: Optional[int] = None
+    visible_satellites: Optional[int] = None
     rtk_status: Optional[Union[int, str]] = None
+    zoom_ratio: Optional[float] = None
+    focal_length_mm: Optional[float] = None
     source_timestamp: Optional[str] = None
+    source_monotonic_ns: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return json_safe(asdict(self))
@@ -67,6 +81,13 @@ class FrameResult:
     rtk_status: Optional[Union[int, str]]
     warning: List[str]
     metrics: Dict[str, Any] = field(default_factory=dict)
+    schema_version: str = "1.0"
+    source_frame_id: Optional[int] = None
+    capture_monotonic_ns: Optional[int] = None
+    row_stride: Optional[int] = None
+    pixel_format: Optional[str] = None
+    gap_candidates: Optional[List[Dict[str, Any]]] = None
+    overlay: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return json_safe(asdict(self))

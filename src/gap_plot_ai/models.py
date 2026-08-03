@@ -63,16 +63,40 @@ class UltralyticsModel:
             raise ValueError(
                 f"Task model {self.path.name} adalah {actual_task}, expected {self.expected_task}"
             )
-        self.names = {int(key): str(value) for key, value in self.model.names.items()}
         configured_names = {
             int(key): str(value) for key, value in model_config.get("class_names", {}).items()
         }
-        if configured_names and self.names != configured_names:
+        # On exported ONNX/TensorRT models, Ultralytics' public ``names``
+        # property creates a temporary predictor/backend when no predictor is
+        # initialized. Reading it here would deserialize the engine once, then
+        # ``predict()`` would create a second execution context. Use embedded
+        # PyTorch names when directly available; otherwise defer validation
+        # until the persistent predictor has been initialized by warm-up.
+        embedded_names = getattr(getattr(self.model, "model", None), "names", None)
+        self._configured_names = configured_names
+        self._names_validated = False
+        self.names = configured_names.copy()
+        if embedded_names is not None:
+            self._validate_names(embedded_names)
+        elif not configured_names:
             raise ValueError(
-                f"Class mapping model berubah: checkpoint={self.names}, config={configured_names}"
+                "class_names wajib dikonfigurasi untuk backend export agar metadata "
+                "tidak memicu backend sementara"
             )
+        self._predictor_identity: Optional[int] = None
+        self._backend_initialization_count = 0
         self.sha256 = sha256_file(self.path)
         self.ultralytics_version = ultralytics.__version__
+
+    def _validate_names(self, names: Any) -> None:
+        actual = {int(key): str(value) for key, value in names.items()}
+        if self._configured_names and actual != self._configured_names:
+            raise ValueError(
+                f"Class mapping model berubah: checkpoint={actual}, "
+                f"config={self._configured_names}"
+            )
+        self.names = actual
+        self._names_validated = True
 
     def audit(self) -> Dict[str, Any]:
         return {
@@ -88,10 +112,27 @@ class UltralyticsModel:
             "tiled": bool(self.config.get("tiled", False)),
             "tile_size": self.config.get("tile_size"),
             "tile_overlap": self.config.get("tile_overlap"),
+            "global_nms_backend": self.config.get("global_nms_backend"),
+            "center_suppression_enabled": bool(
+                self.config.get("enable_center_suppression", False)
+            ),
+            "backend_initialization_count": self._backend_initialization_count,
+            "names_validated": self._names_validated,
         }
 
+    def warmup(self) -> ModelOutput:
+        image_size = int(self.config["image_size"])
+        frame = np.zeros((image_size, image_size, 3), dtype=np.uint8)
+        output = self.predict(frame)
+        if output.warning:
+            raise RuntimeError(f"Model warm-up gagal: {output.warning}")
+        return output
+
+    def shutdown(self) -> None:
+        self.model = None
+
     def _predict(self, image_bgr: np.ndarray) -> Any:
-        return self.model.predict(
+        results = self.model.predict(
             source=image_bgr,
             imgsz=int(self.config["image_size"]),
             conf=float(self.config["confidence_threshold"]),
@@ -104,6 +145,12 @@ class UltralyticsModel:
             verbose=False,
             save=False,
         )
+        predictor = getattr(self.model, "predictor", None)
+        predictor_identity = id(predictor) if predictor is not None else None
+        if predictor_identity is not None and predictor_identity != self._predictor_identity:
+            self._backend_initialization_count += 1
+            self._predictor_identity = predictor_identity
+        return results
 
     def predict(self, image_bgr: np.ndarray) -> ModelOutput:
         if image_bgr.ndim != 3 or image_bgr.shape[2] != 3 or image_bgr.size == 0:
@@ -117,6 +164,14 @@ class UltralyticsModel:
                     warning="empty_model_output",
                 )
             result = results[0]
+            if not self._names_validated:
+                result_names = getattr(result, "names", None)
+                if result_names is None:
+                    predictor = getattr(self.model, "predictor", None)
+                    result_names = getattr(getattr(predictor, "model", None), "names", None)
+                if result_names is None:
+                    raise ValueError("Class mapping backend tidak tersedia setelah warm-up")
+                self._validate_names(result_names)
             speed = getattr(result, "speed", {}) or {}
             if self.expected_task == "detect":
                 output = self._parse_detector(result)

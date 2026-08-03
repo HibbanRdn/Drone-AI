@@ -19,7 +19,7 @@ camera:
 
 runtime:
   root: runtime
-  queue_capacity: 2
+  queue_capacity: 1
   worker_poll_ms: 10
   device: auto
   reuse_last_segmentation: true
@@ -40,8 +40,9 @@ models:
     tile_size: 1024
     tile_overlap: 128
     global_nms_iou: 0.1
+    global_nms_backend: torchvision
     center_duplicate_radius_px: 8.0
-    enable_center_suppression: true
+    enable_center_suppression: false
     max_detections_full_frame: 5000
     pilot_overlay_max_boxes: 200
     interval_frames: 1
@@ -111,6 +112,15 @@ models:
       workspace_gib: 2
 
 overlay:
+  enabled: true
+  max_objects: auto
+  min_confidence: existing
+  mode: compact
+  selection_strategy: confidence
+  stale_result_timeout_ms: 1500
+  coordinate_space: psdk_10000
+  aspect_mode: stretch
+  rotation_degrees: 0
   detector_bgr: [0, 255, 0]
   segmenter_bgr: [0, 215, 255]
   status_bgr: [255, 255, 255]
@@ -127,6 +137,12 @@ storage:
   log_backup_count: 5
   save_snapshots: true
   save_preview_video: false
+
+logging:
+  enabled: true
+  save_all_detections: true
+  save_sample_frames: false
+  sample_interval_seconds: 5
 
 parity:
   detector_count_tolerance: 2

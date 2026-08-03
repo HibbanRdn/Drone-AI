@@ -22,7 +22,7 @@ class QueueStats:
 class LatestFrameQueue(Generic[T]):
     """Bounded queue that discards oldest work instead of creating latency backlog."""
 
-    def __init__(self, capacity: int = 2):
+    def __init__(self, capacity: int = 1):
         if capacity < 1:
             raise ValueError("capacity minimal 1")
         self._capacity = capacity

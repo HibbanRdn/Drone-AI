@@ -62,6 +62,11 @@ def test_snapshot_and_idempotent_graceful_close(tmp_path: Path, config_dict: dic
     assert first == second
     summary = json.loads(first.read_text(encoding="utf-8"))
     assert summary["snapshots"] == 1
+    assert writer.session_id.endswith("Z")
+    assert "T" in writer.session_id
+    assert (writer.session_dir / "frames").is_dir()
+    assert (writer.session_dir / "overlays").is_dir()
+    assert (writer.session_dir / "errors.log").is_file()
 
 
 def test_jsonl_rotation_bounds_files_and_reports_discard(

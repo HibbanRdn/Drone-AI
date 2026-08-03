@@ -45,6 +45,24 @@ def test_generate_single_window_for_small_frame() -> None:
     ]
 
 
+def test_generate_native_1920x1080_grid_and_edges() -> None:
+    windows = generate_tile_windows(1920, 1080, 1024, 128)
+    assert windows == [
+        TileWindow(0, 0, 1024, 1024),
+        TileWindow(896, 0, 1024, 1024),
+        TileWindow(0, 56, 1024, 1024),
+        TileWindow(896, 56, 1024, 1024),
+    ]
+
+
+def test_generate_nonstandard_frame_has_complete_edge_coverage() -> None:
+    windows = generate_tile_windows(1733, 997, 640, 96)
+    assert windows[0] == TileWindow(0, 0, 640, 640)
+    assert windows[-1].x + windows[-1].width == 1733
+    assert windows[-1].y + windows[-1].height == 997
+    assert all(window.width == 640 and window.height == 640 for window in windows)
+
+
 def test_local_box_to_global_coordinates() -> None:
     assert local_box_to_global(
         [1.0, 2.0, 11.0, 12.0], TileWindow(896, 128, 1024, 1024)
@@ -85,9 +103,11 @@ def test_merge_diagnostics_and_full_frame_cap() -> None:
         max_detections_full_frame=1,
     )
     assert len(kept) == 1
-    assert diagnostics == {
-        "raw_tile_predictions": 3,
-        "after_global_nms": 2,
-        "after_center_suppression": 1,
-        "duplicates_removed": 2,
-    }
+    assert diagnostics["raw_tile_predictions"] == 3
+    assert diagnostics["after_global_nms"] == 2
+    assert diagnostics["after_center_suppression"] == 1
+    assert diagnostics["duplicates_removed"] == 2
+    assert diagnostics["global_nms_backend"].startswith("torchvision_")
+    assert diagnostics["global_nms_ms"] >= 0
+    assert diagnostics["center_suppression_ms"] >= 0
+    assert diagnostics["center_suppression_enabled"] is True

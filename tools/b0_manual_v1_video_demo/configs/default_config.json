@@ -15,7 +15,7 @@
   "max_detections_per_tile": 1000,
   "global_nms_iou": 0.1,
   "center_duplicate_radius_px": 8.0,
-  "enable_center_suppression": true,
+  "enable_center_suppression": false,
   "max_detections_full_frame": 5000,
   "inference_every_n_frames": 5,
   "playback_mode": "processed_frames_only",

@@ -1,0 +1,43 @@
+extends: app.yaml
+
+app:
+  status: dev_live_ready
+  identity:
+    pilot_display_name: Gap Plot AI DEV
+
+live:
+  camera: M4E_VIS
+  target_inference_fps: 1.5
+  frame_queue_size: 1
+  drop_old_frames: true
+  batch_size: 1
+  warmup_before_running: true
+  stream_timeout_ms: 5000
+  worker_heartbeat_timeout_ms: 3000
+
+runtime:
+  queue_capacity: 1
+
+models:
+  detector:
+    enabled: true
+    enable_center_suppression: false
+  segmenter:
+    # Plot segmentation is not live gap detection. Keep it off until its
+    # resource use and Pilot rendered-stream path pass hardware validation.
+    enabled: false
+
+overlay:
+  enabled: true
+  max_objects: auto
+  min_confidence: existing
+  mode: compact
+  selection_strategy: confidence
+  stale_result_timeout_ms: 1500
+  debug_static_boxes: false
+
+logging:
+  enabled: true
+  save_all_detections: true
+  save_sample_frames: false
+  sample_interval_seconds: 5

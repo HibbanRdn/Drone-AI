@@ -32,18 +32,27 @@ def box_iou(a: Detection, b: Detection) -> float:
 
 
 def class_aware_nms(detections: list[Detection], iou_threshold: float) -> list[Detection]:
-    kept: list[Detection] = []
-    for class_id in sorted({detection.class_id for detection in detections}):
-        pending = sorted(
-            (detection for detection in detections if detection.class_id == class_id),
-            key=lambda item: item.confidence,
-            reverse=True,
-        )
-        while pending:
-            selected = pending.pop(0)
-            kept.append(selected)
-            pending = [candidate for candidate in pending if box_iou(selected, candidate) <= iou_threshold]
-    return sorted(kept, key=lambda item: item.confidence, reverse=True)
+    if not detections:
+        return []
+    try:
+        import torch
+        from torchvision.ops import batched_nms
+    except ImportError as exc:
+        raise RuntimeError("Torch/TorchVision wajib tersedia untuk global NMS.") from exc
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    boxes = torch.tensor(
+        [[item.x1, item.y1, item.x2, item.y2] for item in detections],
+        dtype=torch.float32,
+        device=device,
+    )
+    scores = torch.tensor(
+        [item.confidence for item in detections], dtype=torch.float32, device=device
+    )
+    classes = torch.tensor(
+        [item.class_id for item in detections], dtype=torch.int64, device=device
+    )
+    indices = batched_nms(boxes, scores, classes, float(iou_threshold))
+    return [detections[int(index)] for index in indices.detach().cpu().tolist()]
 
 
 def center_distance_suppression(
@@ -73,7 +82,7 @@ def merge_detections(
     detections: list[Detection],
     global_nms_iou: float = 0.1,
     center_duplicate_radius_px: float = 8.0,
-    enable_center_suppression: bool = True,
+    enable_center_suppression: bool = False,
     max_detections_full_frame: int = 5000,
 ) -> tuple[list[Detection], MergeDiagnostics]:
     after_nms = class_aware_nms(detections, global_nms_iou)

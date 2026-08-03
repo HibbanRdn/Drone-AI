@@ -59,22 +59,28 @@ def test_runtime_shutdown_writes_all_session_outputs(
     assert runtime.close("completed") == summary
 
 
-def test_runtime_stop_disables_inference(config_dict: dict, monkeypatch) -> None:
+def test_runtime_stop_is_idempotent_and_restart_reuses_models(
+    config_dict: dict, monkeypatch
+) -> None:
     import gap_plot_ai.runtime as runtime_module
 
     monkeypatch.setattr(runtime_module, "UltralyticsModel", FakeModel)
     runtime = runtime_module.InferenceRuntime(config_dict, backend="pt")
-    runtime.set_controls(running=False)
     result, _ = runtime.process_frame(
         np.zeros((24, 32, 3), dtype=np.uint8),
         frame_index=1,
         capture_timestamp="unknown",
         camera_source="offline_wide_video",
     )
+    assert result.plant_detections
+    load_count = runtime.model_load_count
+    first_summary = runtime.stop()
+    assert runtime.status == "IDLE"
+    assert runtime.stop() == first_summary
+    assert runtime.start()
+    assert runtime.model_load_count == load_count
+    assert runtime.warmup_count == 1
     runtime.close()
-    assert result.plant_detections == []
-    assert result.plot_segmentation is not None
-    assert result.plot_segmentation["contours"] == []
 
 
 def test_runtime_marks_reused_segmentation_without_double_counting_latency(

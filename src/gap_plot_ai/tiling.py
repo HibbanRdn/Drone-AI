@@ -113,26 +113,30 @@ def box_iou(a: TiledDetection, b: TiledDetection) -> float:
 def class_aware_nms(
     detections: List[TiledDetection], iou_threshold: float
 ) -> List[TiledDetection]:
-    kept: List[TiledDetection] = []
-    for class_id in sorted({detection.class_id for detection in detections}):
-        pending = sorted(
-            (
-                detection
-                for detection in detections
-                if detection.class_id == class_id
-            ),
-            key=lambda item: item.confidence,
-            reverse=True,
-        )
-        while pending:
-            selected = pending.pop(0)
-            kept.append(selected)
-            pending = [
-                candidate
-                for candidate in pending
-                if box_iou(selected, candidate) <= iou_threshold
-            ]
-    return sorted(kept, key=lambda item: item.confidence, reverse=True)
+    if not detections:
+        return []
+    try:
+        import torch
+        from torchvision.ops import batched_nms
+    except ImportError as exc:
+        raise RuntimeError(
+            "Torch/TorchVision wajib tersedia untuk global NMS tervalidasi."
+        ) from exc
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    boxes = torch.tensor(
+        [[item.x1, item.y1, item.x2, item.y2] for item in detections],
+        dtype=torch.float32,
+        device=device,
+    )
+    scores = torch.tensor(
+        [item.confidence for item in detections], dtype=torch.float32, device=device
+    )
+    class_ids = torch.tensor(
+        [item.class_id for item in detections], dtype=torch.int64, device=device
+    )
+    keep = batched_nms(boxes, scores, class_ids, float(iou_threshold))
+    indices = keep.detach().cpu().tolist()
+    return [detections[int(index)] for index in indices]
 
 
 def center_distance_suppression(
@@ -168,22 +172,41 @@ def merge_detections(
     center_duplicate_radius_px: float,
     enable_center_suppression: bool,
     max_detections_full_frame: int,
-) -> Tuple[List[TiledDetection], Dict[str, int]]:
+) -> Tuple[List[TiledDetection], Dict[str, Any]]:
+    nms_started = time.perf_counter()
     after_nms = class_aware_nms(detections, global_nms_iou)
+    global_nms_ms = (time.perf_counter() - nms_started) * 1000
+    center_started = time.perf_counter()
     after_center = (
         center_distance_suppression(after_nms, center_duplicate_radius_px)
         if enable_center_suppression
         else after_nms
     )
+    center_suppression_ms = (time.perf_counter() - center_started) * 1000
     final = sorted(
         after_center, key=lambda item: item.confidence, reverse=True
     )[:max_detections_full_frame]
     return final, {
+        "global_nms_backend": "torchvision_cuda"
+        if _torchvision_nms_uses_cuda()
+        else "torchvision_cpu",
+        "global_nms_ms": global_nms_ms,
+        "center_suppression_ms": center_suppression_ms,
         "raw_tile_predictions": len(detections),
         "after_global_nms": len(after_nms),
         "after_center_suppression": len(final),
         "duplicates_removed": len(detections) - len(final),
+        "center_suppression_enabled": bool(enable_center_suppression),
     }
+
+
+def _torchvision_nms_uses_cuda() -> bool:
+    try:
+        import torch
+
+        return bool(torch.cuda.is_available())
+    except ImportError:
+        return False
 
 
 def predict_tiled_detector(

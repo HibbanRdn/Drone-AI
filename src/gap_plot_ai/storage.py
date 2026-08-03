@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 import threading
+import time
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -91,7 +92,7 @@ class SessionWriter:
                     minimum_free_bytes // (1024 * 1024),
                 )
             )
-        base = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
+        base = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
         session_dir = self.sessions_root / base
         counter = 1
         while session_dir.exists():
@@ -101,7 +102,11 @@ class SessionWriter:
         self.session_id = session_dir.name
         self.session_dir = session_dir
         self.snapshots_dir = session_dir / "snapshots"
+        self.frames_dir = session_dir / "frames"
+        self.overlays_dir = session_dir / "overlays"
         self.snapshots_dir.mkdir()
+        self.frames_dir.mkdir()
+        self.overlays_dir.mkdir()
         self._lock = threading.Lock()
         self._closed = False
         self._record_count = 0
@@ -110,6 +115,11 @@ class SessionWriter:
         self._bytes_written = 0
         self._max_session_bytes = int(storage_config["max_session_bytes"])
         self._snapshot_bytes = 0
+        self._save_sample_frames = bool(storage_config.get("save_sample_frames", False))
+        self._sample_interval_seconds = float(
+            storage_config.get("sample_interval_seconds", 5)
+        )
+        self._last_sample_monotonic = float("-inf")
         jsonl_backup_count = int(storage_config.get("jsonl_backup_count", 2))
         log_storage_reserve = int(storage_config["log_rotate_bytes"]) * (
             int(storage_config["log_backup_count"]) + 1
@@ -162,8 +172,18 @@ class SessionWriter:
         )
         handler.formatter.converter = __import__("time").gmtime
         self.logger.addHandler(handler)
+        error_handler = RotatingFileHandler(
+            session_dir / "errors.log",
+            maxBytes=int(storage_config["log_rotate_bytes"]),
+            backupCount=int(storage_config["log_backup_count"]),
+            encoding="utf-8",
+        )
+        error_handler.setLevel(logging.ERROR)
+        error_handler.setFormatter(handler.formatter)
+        self.logger.addHandler(error_handler)
         metadata = {
             **session_metadata,
+            "schema_version": str(session_metadata.get("schema_version", "1.0")),
             "session_id": self.session_id,
             "started_at": datetime.now(timezone.utc).isoformat(),
             "storage_policy": {
@@ -194,9 +214,11 @@ class SessionWriter:
             if self._closed:
                 raise RuntimeError("session writer sudah ditutup")
             record = result.to_dict()
+            record["schema_version"] = result.schema_version
             self._bytes_written += self._detections.write(record)
             self._bytes_written += self._telemetry.write(
                 {
+                    "schema_version": result.schema_version,
                     "session_id": self.session_id,
                     "frame_index": result.frame_index,
                     "capture_timestamp": result.capture_timestamp,
@@ -205,6 +227,7 @@ class SessionWriter:
             )
             self._bytes_written += self._metrics.write(
                 {
+                    "schema_version": result.schema_version,
                     "session_id": self.session_id,
                     "frame_index": result.frame_index,
                     "capture_timestamp": result.capture_timestamp,
@@ -213,6 +236,43 @@ class SessionWriter:
             )
             self._record_count += 1
             self._warning_count += len(result.warning)
+
+    def save_sample(
+        self, frame_bgr: np.ndarray, overlay_bgr: np.ndarray, frame_index: int
+    ) -> bool:
+        if not self._save_sample_frames:
+            return False
+        now = time.monotonic()
+        if now - self._last_sample_monotonic < self._sample_interval_seconds:
+            return False
+        with self._lock:
+            if self._closed or self._snapshot_bytes >= self._snapshot_budget:
+                return False
+            encoded_items = []
+            for directory, image in (
+                (self.frames_dir, frame_bgr),
+                (self.overlays_dir, overlay_bgr),
+            ):
+                ok, encoded = cv2.imencode(
+                    ".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 90]
+                )
+                if not ok:
+                    self.logger.error("sample_encode_failed frame=%d", frame_index)
+                    return False
+                encoded_items.append((directory, encoded))
+            total_bytes = sum(int(encoded.nbytes) for _, encoded in encoded_items)
+            if self._snapshot_bytes + total_bytes > self._snapshot_budget:
+                self.logger.warning("sample_skipped storage_cap")
+                return False
+            for directory, encoded in encoded_items:
+                path = directory / f"frame_{frame_index:010d}.jpg"
+                temp = path.with_suffix(".jpg.tmp")
+                temp.write_bytes(encoded.tobytes())
+                os.replace(temp, path)
+            self._snapshot_bytes += total_bytes
+            self._bytes_written += total_bytes
+            self._last_sample_monotonic = now
+            return True
 
     def save_snapshot(
         self, frame_bgr: np.ndarray, frame_index: int
@@ -237,7 +297,9 @@ class SessionWriter:
             self._snapshot_count += 1
             return path
 
-    def close(self, status: str = "stopped") -> Path:
+    def close(
+        self, status: str = "stopped", summary_extra: Optional[Dict[str, Any]] = None
+    ) -> Path:
         with self._lock:
             if self._closed:
                 return self.session_dir / "session_summary.json"
@@ -251,6 +313,7 @@ class SessionWriter:
             )
             current_jsonl_bytes = sum(file.disk_bytes() for file in jsonl_writers)
             summary = {
+                "schema_version": "1.0",
                 "session_id": self.session_id,
                 "ended_at": datetime.now(timezone.utc).isoformat(),
                 "status": status,
@@ -266,6 +329,7 @@ class SessionWriter:
                     self._snapshot_bytes >= self._snapshot_budget
                     or jsonl_files_discarded > 0
                 ),
+                **(summary_extra or {}),
             }
             summary_path = self.session_dir / "session_summary.json"
             self._write_json_atomic(summary_path, summary)

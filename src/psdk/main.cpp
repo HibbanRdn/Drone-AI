@@ -6,6 +6,7 @@
 #include <cmath>
 #include <condition_variable>
 #include <cstdint>
+#include <ctime>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -13,12 +14,15 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <sys/stat.h>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <dji_aircraft_info.h>
@@ -44,7 +48,8 @@
 
 namespace {
 
-constexpr char kFrameMagic[8] = {'G', 'P', 'A', 'I', 'F', 'R', 'M', '1'};
+constexpr char kFrameMagic[8] = {'G', 'P', 'A', 'I', 'F', 'R', 'M', '2'};
+constexpr uint16_t kFrameHeaderVersion = 2;
 constexpr uint32_t kTelemetryLatitude = 1U << 0;
 constexpr uint32_t kTelemetryLongitude = 1U << 1;
 constexpr uint32_t kTelemetryRelativeAltitude = 1U << 2;
@@ -52,9 +57,12 @@ constexpr uint32_t kTelemetryAbsoluteAltitude = 1U << 3;
 constexpr uint32_t kTelemetryGimbalPitch = 1U << 4;
 constexpr uint32_t kTelemetryHeading = 1U << 5;
 constexpr uint32_t kTelemetryRtk = 1U << 6;
-constexpr std::size_t kMaxPilotBoxes = 200;
+constexpr uint32_t kTelemetryVelocity = 1U << 7;
+constexpr uint32_t kTelemetryGpsQuality = 1U << 8;
+constexpr std::size_t kMaxPilotBoxes = std::numeric_limits<uint8_t>::max();
 constexpr std::size_t kMaxContours = 64;
 constexpr std::size_t kMaxContourPoints = 128;
+constexpr uint64_t kDefaultStaleResultTimeoutNs = 1'500'000'000ULL;
 
 static_assert(DJI_VERSION_MAJOR == 3 && DJI_VERSION_MINOR == 16 &&
                   DJI_VERSION_MODIFY == 0,
@@ -65,30 +73,51 @@ static_assert(CONFIG_HARDWARE_CONNECTION == DJI_USE_ONLY_USB_BULK_DEVICE,
 #pragma pack(push, 1)
 struct FrameHeader {
     char magic[8];
-    uint64_t frameIndex;
-    uint64_t captureTimestampNs;
+    uint16_t headerVersion;
+    uint16_t pixelFormat;
+    uint64_t frameSequence;
+    uint32_t sourceFrameId;
+    uint64_t captureMonotonicNs;
+    uint64_t captureWallClockNs;
+    uint64_t telemetryMonotonicNs;
     uint32_t width;
     uint32_t height;
+    uint32_t rowStride;
     uint32_t channels;
     uint32_t dataLength;
     double latitude;
     double longitude;
     double relativeAltitude;
     double absoluteAltitude;
+    double aircraftRoll;
+    double aircraftPitch;
+    double aircraftYaw;
+    double gimbalRoll;
     double gimbalPitch;
-    double heading;
+    double gimbalYaw;
+    double velocityX;
+    double velocityY;
+    double velocityZ;
+    double speedMps;
     int32_t rtkStatus;
+    int32_t gpsSignalLevel;
+    uint32_t visibleSatellites;
     uint32_t telemetryValidMask;
 };
 #pragma pack(pop)
 
-static_assert(sizeof(FrameHeader) == 96, "FrameHeader harus sama dengan worker Python");
+static_assert(sizeof(FrameHeader) == 196, "FrameHeader v2 harus sama dengan worker Python");
 
 struct FramePacket {
-    uint64_t frameIndex = 0;
-    uint64_t captureTimestampNs = 0;
+    uint64_t frameSequence = 0;
+    uint32_t sourceFrameId = 0;
+    uint64_t captureMonotonicNs = 0;
+    uint64_t captureWallClockNs = 0;
+    uint16_t pixelFormat = 0;
     uint16_t width = 0;
     uint16_t height = 0;
+    uint32_t rowStride = 0;
+    T_DjiLiveviewImageInfo imageInfo = {};
     std::vector<uint8_t> rgb;
 };
 
@@ -113,37 +142,61 @@ struct NormalizedContour {
 
 struct RenderResult {
     uint64_t frameIndex = 0;
-    std::string status = "Initializing";
+    uint64_t captureMonotonicNs = 0;
+    uint64_t generatedMonotonicNs = 0;
+    std::string status = "IDLE";
     double latencyMs = 0;
     double fps = 0;
+    double p50LatencyMs = 0;
+    int32_t gapCount = -1;
+    uint32_t totalDetections = 0;
+    uint32_t overlayDetections = 0;
+    uint32_t sourceWidth = 0;
+    uint32_t sourceHeight = 0;
+    uint32_t rowStride = 0;
+    int32_t rtkStatus = -1;
+    int32_t gpsSignalLevel = -1;
+    int32_t modelLoadCount = 0;
+    int32_t warmupCount = 0;
+    int32_t backendInitializationCount = 0;
+    std::string sessionId;
+    std::string lastError;
     std::vector<NormalizedBox> boxes;
     std::vector<NormalizedContour> contours;
 };
 
 struct Controls {
-    bool running = true;
+    bool running = false;
     bool plant = true;
-    bool segmenter = true;
+    bool segmenter = false;
     uint32_t snapshotSequence = 0;
 };
 
 std::atomic<bool> g_stop{false};
 std::atomic<uint64_t> g_lastFrameArrivalNs{0};
+std::atomic<uint64_t> g_frameSequence{0};
+std::atomic<uint64_t> g_sourceFrameCount{0};
 std::mutex g_frameMutex;
 std::condition_variable g_frameCondition;
 FramePacket g_latestFrame;
 bool g_framePending = false;
 std::atomic<uint64_t> g_droppedFrames{0};
+std::atomic<bool> g_overlayMetadataAvailable{true};
+std::atomic<uint64_t> g_overlayMetadataErrorCode{0};
 std::mutex g_resultMutex;
 RenderResult g_renderResult;
 std::mutex g_controlMutex;
 Controls g_controls;
-std::array<int32_t, 6> g_widgetValues{{0, 0, 1, 1, 0, 0}};
+std::array<int32_t, 6> g_widgetValues{{0, 0, 1, 0, 0, 0}};
 std::atomic<int32_t> g_statusValue{0};
 std::string g_ipcDirectory;
 bool g_fcSubscriptionInitialized = false;
 bool g_liveviewInitialized = false;
 bool g_imageStreamStarted = false;
+bool g_encoderRegistered = false;
+bool g_renderedStreamEnabled = false;
+bool g_staticOverlayDebug = false;
+uint64_t g_staleResultTimeoutNs = kDefaultStaleResultTimeoutNs;
 
 uint64_t RealtimeNs()
 {
@@ -167,6 +220,30 @@ float Clamp01(float value)
         return 0;
     }
     return std::max(0.0F, std::min(1.0F, value));
+}
+
+bool EnvironmentFlag(const char *name, bool defaultValue = false)
+{
+    const char *value = std::getenv(name);
+    if (value == nullptr || value[0] == '\0') {
+        return defaultValue;
+    }
+    return std::strcmp(value, "1") == 0 || std::strcmp(value, "true") == 0 ||
+           std::strcmp(value, "TRUE") == 0;
+}
+
+uint64_t EnvironmentMilliseconds(const char *name, uint64_t defaultValue)
+{
+    const char *value = std::getenv(name);
+    if (value == nullptr || value[0] == '\0') {
+        return defaultValue;
+    }
+    char *end = nullptr;
+    const unsigned long parsed = std::strtoul(value, &end, 10);
+    if (end == value || *end != '\0' || parsed < 100) {
+        return defaultValue;
+    }
+    return static_cast<uint64_t>(parsed);
 }
 
 void SignalHandler(int)
@@ -374,17 +451,23 @@ T_DjiReturnCode SetWidgetValue(E_DjiWidgetType, uint32_t index, int32_t value, v
         std::lock_guard<std::mutex> lock(g_controlMutex);
         switch (index) {
             case 0:
-                g_controls.running = true;
-                g_statusValue.store(2);
+                if (!g_controls.running) {
+                    g_controls.running = true;
+                    g_statusValue.store(1);
+                    g_overlayMetadataAvailable.store(true);
+                    g_overlayMetadataErrorCode.store(0);
+                }
                 break;
             case 1:
-                g_controls.running = false;
-                g_statusValue.store(1);
+                if (g_controls.running) {
+                    g_controls.running = false;
+                    g_statusValue.store(4);
+                }
                 {
                     std::lock_guard<std::mutex> resultLock(g_resultMutex);
                     g_renderResult.boxes.clear();
                     g_renderResult.contours.clear();
-                    g_renderResult.status = "Ready";
+                    g_renderResult.status = "STOPPING";
                 }
                 break;
             case 2:
@@ -490,6 +573,10 @@ void InitTelemetry()
                    DJI_DATA_SUBSCRIPTION_TOPIC_5_HZ);
     SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_QUATERNION,
                    DJI_DATA_SUBSCRIPTION_TOPIC_5_HZ);
+    SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_VELOCITY,
+                   DJI_DATA_SUBSCRIPTION_TOPIC_5_HZ);
+    SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_GPS_SIGNAL_LEVEL,
+                   DJI_DATA_SUBSCRIPTION_TOPIC_5_HZ);
     SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_RTK_POSITION_INFO,
                    DJI_DATA_SUBSCRIPTION_TOPIC_1_HZ);
 }
@@ -497,11 +584,18 @@ void InitTelemetry()
 FrameHeader BuildFrameHeader(const FramePacket &frame)
 {
     FrameHeader header = {};
+    header.gpsSignalLevel = -1;
     std::memcpy(header.magic, kFrameMagic, sizeof(kFrameMagic));
-    header.frameIndex = frame.frameIndex;
-    header.captureTimestampNs = frame.captureTimestampNs;
+    header.headerVersion = kFrameHeaderVersion;
+    header.pixelFormat = frame.pixelFormat;
+    header.frameSequence = frame.frameSequence;
+    header.sourceFrameId = frame.sourceFrameId;
+    header.captureMonotonicNs = frame.captureMonotonicNs;
+    header.captureWallClockNs = frame.captureWallClockNs;
+    header.telemetryMonotonicNs = MonotonicNs();
     header.width = frame.width;
     header.height = frame.height;
+    header.rowStride = frame.rowStride;
     header.channels = 3;
     header.dataLength = static_cast<uint32_t>(frame.rgb.size());
     if (!g_fcSubscriptionInitialized) {
@@ -513,8 +607,10 @@ FrameHeader BuildFrameHeader(const FramePacket &frame)
         header.latitude = position.latitude * radiansToDegrees;
         header.longitude = position.longitude * radiansToDegrees;
         header.absoluteAltitude = position.altitude;
+        header.visibleSatellites = position.visibleSatelliteNumber;
         header.telemetryValidMask |=
-            kTelemetryLatitude | kTelemetryLongitude | kTelemetryAbsoluteAltitude;
+            kTelemetryLatitude | kTelemetryLongitude | kTelemetryAbsoluteAltitude |
+            kTelemetryGpsQuality;
     }
     T_DjiFcSubscriptionHeightRelative relativeAltitude = 0;
     if (ReadTopic(DJI_FC_SUBSCRIPTION_TOPIC_HEIGHT_RELATIVE, &relativeAltitude)) {
@@ -523,18 +619,45 @@ FrameHeader BuildFrameHeader(const FramePacket &frame)
     }
     T_DjiFcSubscriptionGimbalAngles gimbal = {};
     if (ReadTopic(DJI_FC_SUBSCRIPTION_TOPIC_GIMBAL_ANGLES, &gimbal)) {
+        header.gimbalRoll = gimbal.y;
         header.gimbalPitch = gimbal.x;
+        header.gimbalYaw = gimbal.z;
         header.telemetryValidMask |= kTelemetryGimbalPitch;
     }
     T_DjiFcSubscriptionQuaternion quaternion = {};
     if (ReadTopic(DJI_FC_SUBSCRIPTION_TOPIC_QUATERNION, &quaternion)) {
-        const double numerator =
+        const double rollNumerator =
+            2.0 * (quaternion.q0 * quaternion.q1 + quaternion.q2 * quaternion.q3);
+        const double rollDenominator =
+            1.0 - 2.0 * (quaternion.q1 * quaternion.q1 + quaternion.q2 * quaternion.q2);
+        const double pitchValue = std::max(
+            -1.0, std::min(1.0, 2.0 *
+                (quaternion.q0 * quaternion.q2 - quaternion.q3 * quaternion.q1)));
+        const double yawNumerator =
             2.0 * (quaternion.q0 * quaternion.q3 + quaternion.q1 * quaternion.q2);
-        const double denominator =
+        const double yawDenominator =
             1.0 - 2.0 * (quaternion.q2 * quaternion.q2 + quaternion.q3 * quaternion.q3);
-        header.heading =
-            std::atan2(numerator, denominator) * 180.0 / 3.14159265358979323846;
+        constexpr double radiansToDegrees = 180.0 / 3.14159265358979323846;
+        header.aircraftRoll = std::atan2(rollNumerator, rollDenominator) * radiansToDegrees;
+        header.aircraftPitch = std::asin(pitchValue) * radiansToDegrees;
+        header.aircraftYaw = std::atan2(yawNumerator, yawDenominator) * radiansToDegrees;
         header.telemetryValidMask |= kTelemetryHeading;
+    }
+    T_DjiFcSubscriptionVelocity velocity = {};
+    if (ReadTopic(DJI_FC_SUBSCRIPTION_TOPIC_VELOCITY, &velocity) && velocity.health) {
+        header.velocityX = velocity.data.x;
+        header.velocityY = velocity.data.y;
+        header.velocityZ = velocity.data.z;
+        header.speedMps = std::sqrt(
+            header.velocityX * header.velocityX +
+            header.velocityY * header.velocityY +
+            header.velocityZ * header.velocityZ);
+        header.telemetryValidMask |= kTelemetryVelocity;
+    }
+    T_DjiFcSubscriptionGpsSignalLevel gpsSignal = 0;
+    if (ReadTopic(DJI_FC_SUBSCRIPTION_TOPIC_GPS_SIGNAL_LEVEL, &gpsSignal)) {
+        header.gpsSignalLevel = gpsSignal;
+        header.telemetryValidMask |= kTelemetryGpsQuality;
     }
     T_DjiFcSubscriptionRtkPositionInfo rtk = 0;
     if (ReadTopic(DJI_FC_SUBSCRIPTION_TOPIC_RTK_POSITION_INFO, &rtk)) {
@@ -543,6 +666,10 @@ FrameHeader BuildFrameHeader(const FramePacket &frame)
     }
     return header;
 }
+
+void DrawLine(std::vector<uint8_t> *rgb, int width, int height,
+              NormalizedPoint first, NormalizedPoint second);
+T_DjiLiveViewStandardMetaData *BuildPilotMetadata(const RenderResult &result);
 
 void FrameSpoolThread()
 {
@@ -569,6 +696,36 @@ void FrameSpoolThread()
         if (!AtomicWrite(IpcPath("latest_frame.rgb"), payload.data(), payload.size())) {
             USER_LOG_WARN("Gagal menulis latest-frame spool.");
         }
+        if (g_renderedStreamEnabled) {
+            RenderResult render;
+            {
+                std::lock_guard<std::mutex> lock(g_resultMutex);
+                render = g_renderResult;
+            }
+            const uint64_t now = MonotonicNs();
+            if (render.generatedMonotonicNs == 0 ||
+                now - render.generatedMonotonicNs > g_staleResultTimeoutNs) {
+                render.boxes.clear();
+                render.contours.clear();
+            }
+            std::vector<uint8_t> rendered = frame.rgb;
+            for (const NormalizedContour &contour : render.contours) {
+                for (std::size_t index = 0; index < contour.points.size(); ++index) {
+                    DrawLine(&rendered, frame.width, frame.height,
+                             contour.points[index],
+                             contour.points[(index + 1) % contour.points.size()]);
+                }
+            }
+            T_DjiLiveViewStandardMetaData *metadata = BuildPilotMetadata(render);
+            const T_DjiReturnCode encodeCode = DjiLiveview_EncodeAFrameToH264(
+                rendered.data(), static_cast<uint32_t>(rendered.size()),
+                frame.imageInfo, metadata);
+            if (encodeCode != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+                USER_LOG_WARN("Encode AI rendered stream gagal, code=0x%08llX",
+                              static_cast<unsigned long long>(encodeCode));
+            }
+            std::free(metadata);
+        }
     }
 }
 
@@ -586,11 +743,12 @@ bool ParseResultFile(RenderResult *parsed)
         std::string type;
         stream >> type;
         if (type == "RESULT") {
-            uint64_t captureNs = 0;
-            uint64_t inferenceNs = 0;
             int warningCount = 0;
-            stream >> next.frameIndex >> captureNs >> inferenceNs >> next.latencyMs >>
-                next.fps >> next.status >> warningCount;
+            stream >> next.frameIndex >> next.captureMonotonicNs >>
+                next.generatedMonotonicNs >> next.latencyMs >> next.fps >>
+                next.p50LatencyMs >> next.status >> warningCount >>
+                next.totalDetections >> next.overlayDetections >> next.gapCount >>
+                next.sourceWidth >> next.sourceHeight >> next.rowStride;
             sawHeader = !stream.fail();
         } else if (type == "BOX" && next.boxes.size() < kMaxPilotBoxes) {
             unsigned int classId = 0;
@@ -714,6 +872,59 @@ T_DjiLiveViewStandardMetaData *BuildPilotMetadata(const RenderResult &result)
     return metadata;
 }
 
+bool SendPilotMetadata(RenderResult result)
+{
+    const uint64_t now = MonotonicNs();
+    if (!g_staticOverlayDebug &&
+        (result.generatedMonotonicNs == 0 ||
+         now - result.generatedMonotonicNs > g_staleResultTimeoutNs)) {
+        result.boxes.clear();
+        result.contours.clear();
+    }
+    T_DjiLiveViewStandardMetaData *metadata = BuildPilotMetadata(result);
+    if (metadata == nullptr) {
+        USER_LOG_ERROR("Alokasi AI metadata gagal.");
+        return false;
+    }
+    const T_DjiReturnCode code = DjiLiveview_SendAiMetaToPilot(metadata);
+    std::free(metadata);
+    if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+        g_overlayMetadataAvailable.store(false);
+        g_overlayMetadataErrorCode.store(static_cast<uint64_t>(code));
+        USER_LOG_ERROR("PSDK AI metadata overlay unavailable, code=0x%08llX",
+                       static_cast<unsigned long long>(code));
+        return false;
+    }
+    g_overlayMetadataAvailable.store(true);
+    g_overlayMetadataErrorCode.store(0);
+    return true;
+}
+
+RenderResult StaticOverlayResult()
+{
+    RenderResult result;
+    result.status = "RUNNING";
+    result.generatedMonotonicNs = MonotonicNs();
+    const std::array<std::pair<float, float>, 5> centers{{
+        {0.50F, 0.50F}, {0.06F, 0.06F}, {0.94F, 0.06F},
+        {0.06F, 0.94F}, {0.94F, 0.94F},
+    }};
+    for (std::size_t index = 0; index < centers.size(); ++index) {
+        NormalizedBox box;
+        box.id = static_cast<uint16_t>(index);
+        box.classId = 0;
+        box.confidence = 1.0F;
+        box.x1 = Clamp01(centers[index].first - 0.04F);
+        box.y1 = Clamp01(centers[index].second - 0.04F);
+        box.x2 = Clamp01(centers[index].first + 0.04F);
+        box.y2 = Clamp01(centers[index].second + 0.04F);
+        result.boxes.push_back(box);
+    }
+    result.totalDetections = static_cast<uint32_t>(result.boxes.size());
+    result.overlayDetections = result.totalDetections;
+    return result;
+}
+
 void EncoderCallback(const uint8_t *buffer, uint32_t length)
 {
     const T_DjiReturnCode code = DjiPayloadCamera_SendVideoStream(buffer, length);
@@ -729,62 +940,46 @@ void EncoderCallback(const uint8_t *buffer, uint32_t length)
 void ImageCallback(E_DjiLiveViewCameraPosition, const uint8_t *buffer, uint32_t length,
                    T_DjiLiveviewImageInfo imageInfo)
 {
-    const uint64_t expected =
-        static_cast<uint64_t>(imageInfo.width) * imageInfo.height * 3;
+    if (g_stop.load()) {
+        return;
+    }
+    const uint32_t rowStride = static_cast<uint32_t>(imageInfo.width) * 3U;
+    const uint64_t expected = static_cast<uint64_t>(rowStride) * imageInfo.height;
     if (buffer == nullptr || imageInfo.pixFmt != PIXFMT_RGB_PACKED ||
         length != expected || expected == 0) {
         return;
     }
+    const uint64_t arrivalMonotonicNs = MonotonicNs();
+    g_lastFrameArrivalNs.store(arrivalMonotonicNs);
+    g_sourceFrameCount.fetch_add(1);
+    Controls controls;
+    {
+        std::lock_guard<std::mutex> lock(g_controlMutex);
+        controls = g_controls;
+    }
+    if (!controls.running && !g_renderedStreamEnabled) {
+        return;
+    }
     FramePacket packet;
-    packet.frameIndex = imageInfo.frameId;
-    packet.captureTimestampNs = RealtimeNs();
+    packet.frameSequence = g_frameSequence.fetch_add(1) + 1;
+    packet.sourceFrameId = imageInfo.frameId;
+    packet.captureMonotonicNs = arrivalMonotonicNs;
+    packet.captureWallClockNs = RealtimeNs();
+    packet.pixelFormat = static_cast<uint16_t>(imageInfo.pixFmt);
     packet.width = imageInfo.width;
     packet.height = imageInfo.height;
+    packet.rowStride = rowStride;
+    packet.imageInfo = imageInfo;
     packet.rgb.assign(buffer, buffer + length);
     {
         std::lock_guard<std::mutex> lock(g_frameMutex);
         if (g_framePending) {
             g_droppedFrames.fetch_add(1);
         }
-        g_latestFrame = packet;
+        g_latestFrame = std::move(packet);
         g_framePending = true;
     }
     g_frameCondition.notify_one();
-    g_lastFrameArrivalNs.store(MonotonicNs());
-
-    Controls controls;
-    {
-        std::lock_guard<std::mutex> lock(g_controlMutex);
-        controls = g_controls;
-    }
-    RenderResult render;
-    {
-        std::lock_guard<std::mutex> lock(g_resultMutex);
-        render = g_renderResult;
-    }
-    if (!controls.running) {
-        render.boxes.clear();
-        render.contours.clear();
-    }
-    std::vector<uint8_t> rendered(buffer, buffer + length);
-    if (controls.segmenter) {
-        for (const NormalizedContour &contour : render.contours) {
-            for (std::size_t index = 0; index < contour.points.size(); ++index) {
-                DrawLine(&rendered, imageInfo.width, imageInfo.height,
-                         contour.points[index],
-                         contour.points[(index + 1) % contour.points.size()]);
-            }
-        }
-    }
-    if (!controls.plant) {
-        render.boxes.clear();
-    }
-    T_DjiLiveViewStandardMetaData *metadata = BuildPilotMetadata(render);
-    if (metadata != nullptr) {
-        DjiLiveview_SendAiMetaToPilot(metadata);
-    }
-    DjiLiveview_EncodeAFrameToH264(rendered.data(), length, imageInfo, metadata);
-    std::free(metadata);
 }
 
 void StartLiveview()
@@ -804,15 +999,21 @@ void StartLiveview()
     if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
         throw std::runtime_error("Register AI label gagal");
     }
-    code = DjiLiveview_RegEncoderCallback(EncoderCallback);
-    if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-        throw std::runtime_error("Register encoder callback gagal");
+    if (g_renderedStreamEnabled) {
+        code = DjiLiveview_RegEncoderCallback(EncoderCallback);
+        if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+            throw std::runtime_error("Rendered stream diminta tetapi encoder callback tidak tersedia");
+        }
+        g_encoderRegistered = true;
     }
     code = DjiLiveview_StartImageStream(
         DJI_LIVEVIEW_CAMERA_POSITION_NO_1, DJI_LIVEVIEW_CAMERA_SOURCE_M4E_VIS,
         PIXFMT_RGB_PACKED, ImageCallback);
     if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-        throw std::runtime_error("Start M4E visual image stream gagal");
+        std::ostringstream message;
+        message << "Decoded M4E RGB stream unavailable, code=0x" << std::hex << code
+                << "; H.264 decoder fallback tidak dibangun pada target ini";
+        throw std::runtime_error(message.str());
     }
     g_imageStreamStarted = true;
     g_lastFrameArrivalNs.store(MonotonicNs());
@@ -827,7 +1028,10 @@ void StopLiveview()
     }
     if (g_liveviewInitialized) {
         DjiLiveview_UnregUserAiTargetLableList();
-        DjiLiveview_UnregEncoderCallback();
+        if (g_encoderRegistered) {
+            DjiLiveview_UnregEncoderCallback();
+            g_encoderRegistered = false;
+        }
         DjiLiveview_Deinit();
         g_liveviewInitialized = false;
     }
@@ -852,30 +1056,129 @@ void RefreshLiveviewIfStalled()
     if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
         USER_LOG_ERROR("Resubscribe liveview gagal, code=0x%08llX",
                        static_cast<unsigned long long>(code));
-        g_statusValue.store(3);
+        g_statusValue.store(5);
     }
     g_lastFrameArrivalNs.store(now);
 }
 
 void UpdatePilotStatus(const RenderResult &result)
 {
-    if (result.status == "Running") {
-        g_statusValue.store(2);
-    } else if (result.status == "Ready") {
-        g_statusValue.store(1);
-    } else if (result.status == "Error") {
-        g_statusValue.store(3);
+    if (result.status == "STARTING") g_statusValue.store(1);
+    else if (result.status == "WARMING_UP") g_statusValue.store(2);
+    else if (result.status == "RUNNING") g_statusValue.store(3);
+    else if (result.status == "STOPPING") g_statusValue.store(4);
+    else if (result.status == "ERROR") g_statusValue.store(5);
+    else g_statusValue.store(0);
+    static uint64_t previousFrames = 0;
+    static uint64_t previousTime = MonotonicNs();
+    const uint64_t now = MonotonicNs();
+    const uint64_t currentFrames = g_sourceFrameCount.load();
+    const double elapsedSeconds = static_cast<double>(now - previousTime) / 1e9;
+    const double sourceFps = elapsedSeconds > 0
+        ? static_cast<double>(currentFrames - previousFrames) / elapsedSeconds
+        : 0.0;
+    previousFrames = currentFrames;
+    previousTime = now;
+    char gapText[16] = {};
+    if (result.gapCount < 0) {
+        std::snprintf(gapText, sizeof(gapText), "N/A");
     } else {
-        g_statusValue.store(0);
+        std::snprintf(gapText, sizeof(gapText), "%d", result.gapCount);
     }
     char message[DJI_WIDGET_FLOATING_WINDOW_MSG_MAX_LEN] = {};
-    std::snprintf(message, sizeof(message),
-                  "Gap Plot AI: %s\r\nFPS %.1f | latency %.0f ms\r\n"
-                  "plants(frame) %zu | contours %zu\r\ndropped frames %llu",
-                  result.status.c_str(), result.fps, result.latencyMs,
-                  result.boxes.size(), result.contours.size(),
-                  static_cast<unsigned long long>(g_droppedFrames.load()));
+    if (result.status == "ERROR") {
+        std::snprintf(message, sizeof(message),
+                      "Gap Plot AI DEV: ERROR\r\n%.190s",
+                      result.lastError.empty() ? "worker/stream error; check errors.log"
+                                               : result.lastError.c_str());
+    } else {
+        std::snprintf(message, sizeof(message),
+                      "Gap Plot AI DEV: %s\r\nAI %.1f FPS | %.0f ms | p50 %.0f\r\n"
+                      "plants %u | Pilot %u | gap %s\r\n"
+                      "RTK %d GPS %d | model %d ctx %d warm %d\r\n"
+                      "%ux%u %.1f FPS | drop %llu | log %s",
+                      result.status.c_str(), result.fps, result.latencyMs,
+                      result.p50LatencyMs, result.totalDetections,
+                      result.overlayDetections, gapText,
+                      result.rtkStatus, result.gpsSignalLevel,
+                      result.modelLoadCount, result.backendInitializationCount,
+                      result.warmupCount,
+                      result.sourceWidth, result.sourceHeight, sourceFps,
+                      static_cast<unsigned long long>(g_droppedFrames.load()),
+                      result.sessionId.empty() ? "off" : "active");
+    }
     DjiWidgetFloatingWindow_ShowMessage(message);
+}
+
+bool WorkerHeartbeatHealthy(uint64_t timeoutMilliseconds)
+{
+    struct stat info = {};
+    if (stat(IpcPath("worker_status.json").c_str(), &info) != 0) {
+        return false;
+    }
+    const std::time_t now = std::time(nullptr);
+    if (now < info.st_mtime) {
+        return true;
+    }
+    const uint64_t ageMilliseconds =
+        static_cast<uint64_t>(now - info.st_mtime) * 1000ULL;
+    return ageMilliseconds <= timeoutMilliseconds;
+}
+
+std::string ExtractJsonString(const std::string &payload, const std::string &key)
+{
+    const std::string marker = "\"" + key + "\":\"";
+    const std::size_t start = payload.find(marker);
+    if (start == std::string::npos) {
+        return {};
+    }
+    const std::size_t valueStart = start + marker.size();
+    const std::size_t end = payload.find('"', valueStart);
+    return end == std::string::npos ? std::string{} : payload.substr(valueStart, end - valueStart);
+}
+
+int32_t ExtractJsonInteger(const std::string &payload, const std::string &key,
+                           int32_t fallback)
+{
+    const std::string marker = "\"" + key + "\":";
+    const std::size_t start = payload.find(marker);
+    if (start == std::string::npos) {
+        return fallback;
+    }
+    const char *value = payload.c_str() + start + marker.size();
+    char *end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value) {
+        return fallback;
+    }
+    return static_cast<int32_t>(parsed);
+}
+
+void ReadWorkerStatus(RenderResult *result)
+{
+    std::ifstream input(IpcPath("worker_status.json"));
+    if (!input) {
+        return;
+    }
+    const std::string payload((std::istreambuf_iterator<char>(input)),
+                              std::istreambuf_iterator<char>());
+    const std::string status = ExtractJsonString(payload, "status");
+    if (status == "IDLE" || status == "STARTING" || status == "WARMING_UP" ||
+        status == "RUNNING" || status == "STOPPING" || status == "ERROR") {
+        result->status = status;
+    }
+    const std::string code = ExtractJsonString(payload, "code");
+    const std::string message = ExtractJsonString(payload, "message");
+    if (!code.empty() || !message.empty()) {
+        result->lastError = code + (code.empty() || message.empty() ? "" : ": ") + message;
+    }
+    result->rtkStatus = ExtractJsonInteger(payload, "rtk_status", -1);
+    result->gpsSignalLevel = ExtractJsonInteger(payload, "gps_signal_level", -1);
+    result->modelLoadCount = ExtractJsonInteger(payload, "model_load_count", 0);
+    result->warmupCount = ExtractJsonInteger(payload, "warmup_count", 0);
+    result->backendInitializationCount =
+        ExtractJsonInteger(payload, "backend_initialization_count", 0);
+    result->sessionId = ExtractJsonString(payload, "session_id");
 }
 
 void ValidateAircraft()
@@ -909,6 +1212,13 @@ int main()
         return 2;
     }
     g_ipcDirectory = ipc;
+    g_renderedStreamEnabled = EnvironmentFlag("GAP_PLOT_AI_ENABLE_RENDERED_STREAM");
+    g_staticOverlayDebug = EnvironmentFlag("GAP_PLOT_AI_STATIC_OVERLAY_DEBUG");
+    g_staleResultTimeoutNs =
+        EnvironmentMilliseconds("GAP_PLOT_AI_STALE_RESULT_TIMEOUT_MS", 1500) *
+        1'000'000ULL;
+    const uint64_t workerHeartbeatTimeoutMs =
+        EnvironmentMilliseconds("GAP_PLOT_AI_WORKER_HEARTBEAT_TIMEOUT_MS", 3000);
     bool coreInitialized = false;
     std::thread spoolThread;
     try {
@@ -921,7 +1231,7 @@ int main()
         }
         coreInitialized = true;
         ValidateAircraft();
-        code = DjiCore_SetAlias("Gap Plot AI");
+        code = DjiCore_SetAlias("Gap Plot AI DEV");
         if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
             throw std::runtime_error("DjiCore_SetAlias gagal");
         }
@@ -945,10 +1255,17 @@ int main()
         }
         StartLiveview();
         spoolThread = std::thread(FrameSpoolThread);
-        USER_LOG_INFO("gap_plot_ai ready, M4E visual stream requested.");
+        if (g_staticOverlayDebug) {
+            std::lock_guard<std::mutex> lock(g_resultMutex);
+            g_renderResult = StaticOverlayResult();
+        }
+        USER_LOG_INFO("gap_plot_ai DEV ready, M4E visual stream requested; "
+                      "rendered_stream=%d static_overlay=%d.",
+                      g_renderedStreamEnabled, g_staticOverlayDebug);
 
         uint64_t lastParsedFrame = std::numeric_limits<uint64_t>::max();
         uint64_t lastStatusUpdate = 0;
+        bool pilotOverlayCleared = true;
         while (!g_stop.load()) {
             RenderResult parsed;
             if (ParseResultFile(&parsed) && parsed.frameIndex != lastParsedFrame) {
@@ -956,6 +1273,18 @@ int main()
                 {
                     std::lock_guard<std::mutex> lock(g_resultMutex);
                     g_renderResult = parsed;
+                }
+                Controls controls;
+                {
+                    std::lock_guard<std::mutex> lock(g_controlMutex);
+                    controls = g_controls;
+                }
+                if (controls.running && controls.plant) {
+                    if (!SendPilotMetadata(parsed)) {
+                        g_statusValue.store(5);
+                    } else {
+                        pilotOverlayCleared = parsed.boxes.empty();
+                    }
                 }
             }
             const uint64_t now = MonotonicNs();
@@ -965,6 +1294,54 @@ int main()
                     std::lock_guard<std::mutex> lock(g_resultMutex);
                     current = g_renderResult;
                 }
+                ReadWorkerStatus(&current);
+                Controls controls;
+                {
+                    std::lock_guard<std::mutex> lock(g_controlMutex);
+                    controls = g_controls;
+                }
+                if (g_staticOverlayDebug) {
+                    current = StaticOverlayResult();
+                    if (!SendPilotMetadata(current)) {
+                        current.status = "ERROR";
+                        current.lastError = "STATIC_OVERLAY_UNAVAILABLE: cek PSDK/firmware";
+                    }
+                } else if (controls.running &&
+                           !WorkerHeartbeatHealthy(workerHeartbeatTimeoutMs)) {
+                    current.status = "ERROR";
+                    current.lastError = "WORKER_HEARTBEAT_TIMEOUT: worker tidak merespons";
+                    current.boxes.clear();
+                    current.contours.clear();
+                    g_statusValue.store(5);
+                } else if (controls.running &&
+                           !g_overlayMetadataAvailable.load()) {
+                    current.status = "ERROR";
+                    std::ostringstream error;
+                    error << "OVERLAY_UNAVAILABLE: DjiLiveview_SendAiMetaToPilot code=0x"
+                          << std::hex << g_overlayMetadataErrorCode.load();
+                    current.lastError = error.str();
+                    current.boxes.clear();
+                    current.contours.clear();
+                    g_statusValue.store(5);
+                } else if (!controls.running && current.status != "ERROR") {
+                    current.status = "IDLE";
+                    current.totalDetections = 0;
+                    current.overlayDetections = 0;
+                }
+                const bool resultIsStale =
+                    current.generatedMonotonicNs != 0 &&
+                    now - current.generatedMonotonicNs > g_staleResultTimeoutNs;
+                if (!g_staticOverlayDebug && !pilotOverlayCleared &&
+                    (!controls.running || resultIsStale)) {
+                    RenderResult empty;
+                    empty.generatedMonotonicNs = now;
+                    if (SendPilotMetadata(empty)) {
+                        pilotOverlayCleared = true;
+                    }
+                    current.boxes.clear();
+                    current.contours.clear();
+                    current.overlayDetections = 0;
+                }
                 UpdatePilotStatus(current);
                 RefreshLiveviewIfStalled();
                 lastStatusUpdate = now;
@@ -973,7 +1350,7 @@ int main()
         }
     } catch (const std::exception &error) {
         std::cerr << "gap_plot_ai error: " << error.what() << '\n';
-        g_statusValue.store(3);
+        g_statusValue.store(5);
         g_stop.store(true);
     }
 
@@ -990,5 +1367,5 @@ int main()
     if (coreInitialized) {
         DjiCore_DeInit();
     }
-    return g_statusValue.load() == 3 ? 1 : 0;
+    return g_statusValue.load() == 5 ? 1 : 0;
 }

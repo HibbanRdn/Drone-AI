@@ -16,7 +16,7 @@ def test_dpk_identity_and_binary_match_native_source() -> None:
     assert app_json["firmware_version"] == "00.01.00.00"
     assert app_json["platform"] == "manifold3"
     assert app_json["name"]["name_en"] == "ggp-drone-ai"
-    assert app_json["bin"] == "bin/gap_plot_ai"
+    assert app_json["bin"] == "bin/gap_plot_ai_launcher"
 
     source = (APP_ROOT / "src/psdk/main.cpp").read_text(encoding="utf-8")
     expected_assignments = {
@@ -37,3 +37,14 @@ def test_cmake_contract_matches_manifold_inventory() -> None:
     assert "project(gap_plot_ai LANGUAGES C CXX)" in cmake
     assert "aarch64-linux-gnu-gcc/libpayloadsdk.a" in cmake
     assert "target_compile_features(gap_plot_ai PRIVATE cxx_std_17)" in cmake
+
+
+def test_psdk_callback_only_replaces_latest_frame() -> None:
+    source = (APP_ROOT / "src/psdk/main.cpp").read_text(encoding="utf-8")
+    callback = source.split("void ImageCallback", 1)[1].split("void StartLiveview", 1)[0]
+    assert "g_latestFrame = std::move(packet)" in callback
+    assert "DjiLiveview_EncodeAFrameToH264" not in callback
+    assert "DjiLiveview_SendAiMetaToPilot" not in callback
+    assert "if (g_stop.load())" in callback
+    assert "DrawLine" not in callback
+    assert "model" not in callback.lower()

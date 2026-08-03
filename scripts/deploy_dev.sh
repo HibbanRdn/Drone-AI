@@ -14,7 +14,7 @@ tar -C "${SOURCE_ROOT}" -czf "${ARCHIVE}" \
   --exclude=config/secrets.env --exclude='config/*.secret.*' .
 
 ssh -o BatchMode=yes -o ConnectTimeout=5 "${TARGET}" \
-  "mkdir -p '${REMOTE_ROOT}/source' '${REMOTE_ROOT}/runtime/models' '${REMOTE_ROOT}/config' && chmod 700 '${REMOTE_ROOT}/config'"
+  "mkdir -p '${REMOTE_ROOT}/source' '${REMOTE_ROOT}/config' && chmod 700 '${REMOTE_ROOT}/config'"
 scp -q "${ARCHIVE}" "${TARGET}:${REMOTE_ROOT}/source/gap_plot_ai.tar.gz"
 ssh -o BatchMode=yes "${TARGET}" \
   "tar -xzf '${REMOTE_ROOT}/source/gap_plot_ai.tar.gz' -C '${REMOTE_ROOT}/source'"
@@ -26,10 +26,7 @@ if [[ -f "${SECRETS}" ]]; then
     "chmod 600 '${REMOTE_ROOT}/config/secrets.env.tmp' && mv '${REMOTE_ROOT}/config/secrets.env.tmp' '${REMOTE_ROOT}/config/secrets.env'"
 fi
 
-for model in plant_detector_b0_manual_v1_best plot_segmenter_b4_selected_best; do
-  local_model="${SOURCE_ROOT}/runtime/models/${model}.onnx"
-  if [[ -f "${local_model}" ]]; then
-    scp -q "${local_model}" "${TARGET}:${REMOTE_ROOT}/runtime/models/"
-  fi
-done
-echo "Development source transferred to ${TARGET}:${REMOTE_ROOT}"
+printf '%s\n' \
+  "Development source transferred to ${TARGET}:${REMOTE_ROOT}/source" \
+  "Set GAP_PLOT_AI_APP_ROOT=${REMOTE_ROOT}/source" \
+  "Set GAP_PLOT_AI_SECRETS_FILE=${REMOTE_ROOT}/config/secrets.env"

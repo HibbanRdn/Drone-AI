@@ -18,18 +18,32 @@ export GAP_PLOT_AI_APP_ROOT="${APP_ROOT}"
 "${APP_ROOT}/.venv/bin/python" -m compileall -q "${APP_ROOT}/src" "${APP_ROOT}/tests"
 "${APP_ROOT}/.venv/bin/python" -m pytest "${APP_ROOT}/tests"
 
-if command -v clang++ >/dev/null 2>&1 && clang++ \
-  -std=c++17 -x c++ -fsyntax-only - >/dev/null 2>&1 <<'CPP_PROBE'
+CXX_CHECK="${CXX:-clang++}"
+if ! "${CXX_CHECK}" -std=c++17 -x c++ -fsyntax-only - >/dev/null 2>&1 <<'CPP_PROBE'
 #include <algorithm>
 int main() { return 0; }
 CPP_PROBE
 then
-  clang++ -std=c++17 -fsyntax-only "${APP_ROOT}/src/psdk/main.cpp" \
+  if [[ -x /opt/homebrew/opt/llvm/bin/clang++ ]] && \
+    /opt/homebrew/opt/llvm/bin/clang++ -std=c++17 -x c++ -fsyntax-only - \
+      >/dev/null 2>&1 <<'CPP_PROBE'
+#include <algorithm>
+int main() { return 0; }
+CPP_PROBE
+  then
+    CXX_CHECK=/opt/homebrew/opt/llvm/bin/clang++
+  else
+    CXX_CHECK=""
+  fi
+fi
+
+if [[ -n "${CXX_CHECK}" ]]; then
+  "${CXX_CHECK}" -std=c++17 -fsyntax-only "${APP_ROOT}/src/psdk/main.cpp" \
     -I"${APP_ROOT}/include" \
     -I"${PSDK_ROOT}/psdk_lib/include" \
     -I"${PSDK_ROOT}/samples/sample_c++/platform/linux/common" \
     -I"${PSDK_ROOT}/samples/sample_c++/platform/linux/manifold3/hal"
-  clang++ -std=c++17 -fsyntax-only "${APP_ROOT}/src/psdk/main.cpp" \
+  "${CXX_CHECK}" -std=c++17 -fsyntax-only "${APP_ROOT}/src/psdk/main.cpp" \
     -DGAP_PLOT_AI_COMPILED_APP_INFO=1 \
     -I"${APP_ROOT}/include" \
     -I"${APP_ROOT}/tests/fixtures" \

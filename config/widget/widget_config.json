@@ -11,12 +11,12 @@
       {
         "widget_index": 0,
         "widget_type": "button",
-        "widget_name": "Start AI"
+        "widget_name": "Start Live AI"
       },
       {
         "widget_index": 1,
         "widget_type": "button",
-        "widget_name": "Stop AI"
+        "widget_name": "Stop Live AI"
       },
       {
         "widget_index": 2,
@@ -26,7 +26,7 @@
       {
         "widget_index": 3,
         "widget_type": "switch",
-        "widget_name": "Plot Segmenter"
+        "widget_name": "Gap candidates (N/A)"
       },
       {
         "widget_index": 4,
@@ -39,16 +39,22 @@
         "widget_name": "AI Status",
         "list_item": [
           {
-            "item_name": "Initializing"
+            "item_name": "IDLE"
           },
           {
-            "item_name": "Ready"
+            "item_name": "STARTING"
           },
           {
-            "item_name": "Running"
+            "item_name": "WARMING UP"
           },
           {
-            "item_name": "Error"
+            "item_name": "RUNNING"
+          },
+          {
+            "item_name": "STOPPING"
+          },
+          {
+            "item_name": "ERROR"
           }
         ]
       }

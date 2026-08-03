@@ -10,10 +10,10 @@
     "name_fr": "ggp-drone-ai"
   },
   "description": {
-    "description_cn": ["Onboard plant detection and plot segmentation"],
-    "description_en": ["Onboard plant detection and plot segmentation"],
-    "description_jp": ["Onboard plant detection and plot segmentation"],
-    "description_fr": ["Onboard plant detection and plot segmentation"]
+    "description_cn": ["DEV live plant detection with Pilot AI metadata"],
+    "description_en": ["DEV live plant detection with Pilot AI metadata"],
+    "description_jp": ["DEV live plant detection with Pilot AI metadata"],
+    "description_fr": ["DEV live plant detection with Pilot AI metadata"]
   },
   "maintainer": {
     "maintainer_cn": "Muhamad Hibban Ramadhan",
@@ -23,6 +23,6 @@
   },
   "ver_min": "@MANIFOLD_VER_MIN@",
   "ver_max": "@MANIFOLD_VER_MAX@",
-  "bin": "bin/gap_plot_ai",
-  "userconfig": ["share"]
+  "bin": "bin/gap_plot_ai_launcher",
+  "userconfig": ["payload"]
 }

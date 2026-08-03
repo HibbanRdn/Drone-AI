@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 APP_ROOT="${GAP_PLOT_AI_APP_ROOT:-${SOURCE_ROOT}}"
-CONFIG="${GAP_PLOT_AI_CONFIG:-${SOURCE_ROOT}/config/app.yaml}"
-IPC_DIR="${APP_ROOT}/runtime/ipc"
+CONFIG="${GAP_PLOT_AI_CONFIG:-${SOURCE_ROOT}/config/live.yaml}"
+IPC_DIR="${GAP_PLOT_AI_IPC_DIR:-/dev/shm/ggp-drone-ai}"
 PID_DIR="${APP_ROOT}/runtime/pids"
 REPORT_DIR="${APP_ROOT}/runtime/reports"
 GATE="${APP_ROOT}/runtime/gates/psdk_liveview_verified"
@@ -33,9 +33,14 @@ export GAP_PLOT_AI_APP_ROOT="${APP_ROOT}"
 export PLOT_GAP_ROOT="${PLOT_GAP_ROOT:-${APP_ROOT}}"
 export GAP_PLOT_AI_IPC_DIR="${IPC_DIR}"
 export GAP_PLOT_AI_WIDGET_DIR="${SOURCE_ROOT}/config/widget"
+export GAP_PLOT_AI_STALE_RESULT_TIMEOUT_MS="${GAP_PLOT_AI_STALE_RESULT_TIMEOUT_MS:-1500}"
+export GAP_PLOT_AI_WORKER_HEARTBEAT_TIMEOUT_MS="${GAP_PLOT_AI_WORKER_HEARTBEAT_TIMEOUT_MS:-3000}"
+export GAP_PLOT_AI_ENABLE_RENDERED_STREAM="${GAP_PLOT_AI_ENABLE_RENDERED_STREAM:-0}"
 
+rm -f "${IPC_DIR}/worker_status.json" "${IPC_DIR}/latest_result.txt"
 "${PYTHON_BIN}" -m gap_plot_ai.worker \
-  --config "${CONFIG}" --ipc-dir "${IPC_DIR}" --backend auto \
+  --config "${CONFIG}" --ipc-dir "${IPC_DIR}" \
+  --backend "${GAP_PLOT_AI_BACKEND:-engine}" \
   >> "${APP_ROOT}/runtime/logs/worker.log" 2>&1 &
 worker_pid=$!
 echo "${worker_pid}" > "${PID_DIR}/worker.pid"

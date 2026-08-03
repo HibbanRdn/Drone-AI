@@ -37,6 +37,7 @@ def test_cmake_contract_matches_manifold_inventory() -> None:
     assert "project(gap_plot_ai LANGUAGES C CXX)" in cmake
     assert "aarch64-linux-gnu-gcc/libpayloadsdk.a" in cmake
     assert "target_compile_features(gap_plot_ai PRIVATE cxx_std_17)" in cmake
+    assert 'DEFINED ENV{PSDK_ROOT}' in cmake
 
 
 def test_psdk_callback_only_replaces_latest_frame() -> None:
@@ -48,3 +49,21 @@ def test_psdk_callback_only_replaces_latest_frame() -> None:
     assert "if (g_stop.load())" in callback
     assert "DrawLine" not in callback
     assert "model" not in callback.lower()
+
+
+def test_psdk_signal_and_reconnect_contract_is_safe() -> None:
+    source = (APP_ROOT / "src/psdk/main.cpp").read_text(encoding="utf-8")
+    signal_handler = source.split("void SignalHandler", 1)[1].split(
+        "void EnsureRuntimeDirectories", 1
+    )[0]
+    assert "g_signalStop = 1" in signal_handler
+    assert "notify" not in signal_handler
+    assert "StartImageSubscription" in source
+    assert "g_reconnectIntervalNs" in source
+    assert "H.264 fallback is not compiled" in source
+
+
+def test_official_sample_build_does_not_dirty_vendor_checkout() -> None:
+    script = (APP_ROOT / "scripts/build_psdk_sample.sh").read_text(encoding="utf-8")
+    assert "${APP_ROOT}/build/official_psdk_sample_3.16.0" in script
+    assert "${PSDK_ROOT}/build_manifold3_official" not in script

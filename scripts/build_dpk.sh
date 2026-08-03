@@ -63,6 +63,8 @@ install -m 0755 "${APP_ROOT}/build/bin/gap_plot_ai" \
   "${STAGING}/payload/bin/gap_plot_ai_native"
 install -m 0755 "${SOURCE_ROOT}/scripts/dpk_launcher.sh" \
   "${STAGING}/bin/gap_plot_ai_launcher"
+install -m 0755 "${SOURCE_ROOT}/scripts/live_config_env.py" \
+  "${STAGING}/payload/bin/live_config_env.py"
 mkdir -p "${STAGING}/payload/models/engine"
 mv "${STAGING}/payload/models/plant_detector.engine" \
   "${STAGING}/payload/models/engine/plant_center_manual_v1_b0_tensorrt-8.5.2_cuda-11.4_aarch64_fp16.engine"

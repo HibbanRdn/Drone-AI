@@ -173,6 +173,7 @@ struct Controls {
 };
 
 std::atomic<bool> g_stop{false};
+volatile std::sig_atomic_t g_signalStop = 0;
 std::atomic<uint64_t> g_lastFrameArrivalNs{0};
 std::atomic<uint64_t> g_frameSequence{0};
 std::atomic<uint64_t> g_sourceFrameCount{0};
@@ -192,11 +193,17 @@ std::atomic<int32_t> g_statusValue{0};
 std::string g_ipcDirectory;
 bool g_fcSubscriptionInitialized = false;
 bool g_liveviewInitialized = false;
+bool g_labelsRegistered = false;
 bool g_imageStreamStarted = false;
 bool g_encoderRegistered = false;
 bool g_renderedStreamEnabled = false;
 bool g_staticOverlayDebug = false;
 uint64_t g_staleResultTimeoutNs = kDefaultStaleResultTimeoutNs;
+uint64_t g_streamTimeoutNs = 5'000'000'000ULL;
+uint64_t g_reconnectIntervalNs = 5'000'000'000ULL;
+uint64_t g_nextStreamRetryNs = 0;
+std::atomic<uint64_t> g_liveviewSubscribeErrorCode{0};
+std::string g_liveviewInputMode = "decoded_rgb";
 
 uint64_t RealtimeNs()
 {
@@ -248,8 +255,7 @@ uint64_t EnvironmentMilliseconds(const char *name, uint64_t defaultValue)
 
 void SignalHandler(int)
 {
-    g_stop.store(true);
-    g_frameCondition.notify_all();
+    g_signalStop = 1;
 }
 
 void EnsureRuntimeDirectories()
@@ -951,6 +957,7 @@ void ImageCallback(E_DjiLiveViewCameraPosition, const uint8_t *buffer, uint32_t 
     }
     const uint64_t arrivalMonotonicNs = MonotonicNs();
     g_lastFrameArrivalNs.store(arrivalMonotonicNs);
+    g_liveviewSubscribeErrorCode.store(0);
     g_sourceFrameCount.fetch_add(1);
     Controls controls;
     {
@@ -982,8 +989,34 @@ void ImageCallback(E_DjiLiveViewCameraPosition, const uint8_t *buffer, uint32_t 
     g_frameCondition.notify_one();
 }
 
+bool StartImageSubscription()
+{
+    const T_DjiReturnCode code = DjiLiveview_StartImageStream(
+        DJI_LIVEVIEW_CAMERA_POSITION_NO_1, DJI_LIVEVIEW_CAMERA_SOURCE_M4E_VIS,
+        PIXFMT_RGB_PACKED, ImageCallback);
+    if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+        g_imageStreamStarted = false;
+        g_liveviewSubscribeErrorCode.store(static_cast<uint64_t>(code));
+        USER_LOG_ERROR("Decoded M4E RGB stream unavailable, code=0x%08llX; "
+                       "H.264 decoder fallback is not compiled",
+                       static_cast<unsigned long long>(code));
+        return false;
+    }
+    g_imageStreamStarted = true;
+    g_liveviewSubscribeErrorCode.store(0);
+    g_lastFrameArrivalNs.store(MonotonicNs());
+    USER_LOG_INFO("Decoded M4E RGB liveview subscription active.");
+    return true;
+}
+
 void StartLiveview()
 {
+    if (g_liveviewInputMode != "decoded_rgb") {
+        throw std::runtime_error(
+            "GAP_PLOT_AI_LIVEVIEW_INPUT_MODE must be decoded_rgb; the official "
+            "FFmpeg 4 H.264 sample decoder is documented but not linked into "
+            "this Manifold 3 binary");
+    }
     const T_DjiDataChannelBandwidthProportionOfHighspeedChannel bandwidth = {10, 60, 30};
     T_DjiReturnCode code = DjiHighSpeedDataChannel_SetBandwidthProportion(bandwidth);
     if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
@@ -999,6 +1032,7 @@ void StartLiveview()
     if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
         throw std::runtime_error("Register AI label gagal");
     }
+    g_labelsRegistered = true;
     if (g_renderedStreamEnabled) {
         code = DjiLiveview_RegEncoderCallback(EncoderCallback);
         if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
@@ -1006,59 +1040,82 @@ void StartLiveview()
         }
         g_encoderRegistered = true;
     }
-    code = DjiLiveview_StartImageStream(
-        DJI_LIVEVIEW_CAMERA_POSITION_NO_1, DJI_LIVEVIEW_CAMERA_SOURCE_M4E_VIS,
-        PIXFMT_RGB_PACKED, ImageCallback);
-    if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-        std::ostringstream message;
-        message << "Decoded M4E RGB stream unavailable, code=0x" << std::hex << code
-                << "; H.264 decoder fallback tidak dibangun pada target ini";
-        throw std::runtime_error(message.str());
+    if (!StartImageSubscription()) {
+        g_statusValue.store(5);
+        g_nextStreamRetryNs = MonotonicNs() + g_reconnectIntervalNs;
     }
-    g_imageStreamStarted = true;
-    g_lastFrameArrivalNs.store(MonotonicNs());
 }
 
 void StopLiveview()
 {
     if (g_imageStreamStarted) {
-        DjiLiveview_StopImageStream(DJI_LIVEVIEW_CAMERA_POSITION_NO_1,
-                                    DJI_LIVEVIEW_CAMERA_SOURCE_M4E_VIS);
         g_imageStreamStarted = false;
+        const T_DjiReturnCode code = DjiLiveview_StopImageStream(
+            DJI_LIVEVIEW_CAMERA_POSITION_NO_1,
+            DJI_LIVEVIEW_CAMERA_SOURCE_M4E_VIS);
+        if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+            USER_LOG_WARN("Stop decoded liveview gagal, code=0x%08llX",
+                          static_cast<unsigned long long>(code));
+        }
     }
     if (g_liveviewInitialized) {
-        DjiLiveview_UnregUserAiTargetLableList();
         if (g_encoderRegistered) {
-            DjiLiveview_UnregEncoderCallback();
+            const T_DjiReturnCode code = DjiLiveview_UnregEncoderCallback();
+            if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+                USER_LOG_WARN("Unregister encoder callback gagal, code=0x%08llX",
+                              static_cast<unsigned long long>(code));
+            }
             g_encoderRegistered = false;
         }
-        DjiLiveview_Deinit();
+        if (g_labelsRegistered) {
+            const T_DjiReturnCode code = DjiLiveview_UnregUserAiTargetLableList();
+            if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+                USER_LOG_WARN("Unregister AI label gagal, code=0x%08llX",
+                              static_cast<unsigned long long>(code));
+            }
+            g_labelsRegistered = false;
+        }
+        const T_DjiReturnCode code = DjiLiveview_Deinit();
+        if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+            USER_LOG_WARN("DjiLiveview_Deinit gagal, code=0x%08llX",
+                          static_cast<unsigned long long>(code));
+        }
         g_liveviewInitialized = false;
     }
 }
 
 void RefreshLiveviewIfStalled()
 {
-    if (!g_imageStreamStarted) {
+    if (!g_liveviewInitialized || g_stop.load()) {
         return;
     }
     const uint64_t now = MonotonicNs();
-    const uint64_t last = g_lastFrameArrivalNs.load();
-    if (now - last < 5'000'000'000ULL) {
+    if (now < g_nextStreamRetryNs) {
         return;
     }
-    USER_LOG_WARN("Liveview tidak menerima frame 5 detik; mencoba resubscribe aman.");
-    DjiLiveview_StopImageStream(DJI_LIVEVIEW_CAMERA_POSITION_NO_1,
-                                DJI_LIVEVIEW_CAMERA_SOURCE_M4E_VIS);
-    const T_DjiReturnCode code = DjiLiveview_StartImageStream(
-        DJI_LIVEVIEW_CAMERA_POSITION_NO_1, DJI_LIVEVIEW_CAMERA_SOURCE_M4E_VIS,
-        PIXFMT_RGB_PACKED, ImageCallback);
-    if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-        USER_LOG_ERROR("Resubscribe liveview gagal, code=0x%08llX",
-                       static_cast<unsigned long long>(code));
+    if (g_imageStreamStarted) {
+        const uint64_t last = g_lastFrameArrivalNs.load();
+        if (now - last < g_streamTimeoutNs) {
+            return;
+        }
+        USER_LOG_WARN("Liveview stalled; stopping subscription before retry.");
+        const T_DjiReturnCode stopCode = DjiLiveview_StopImageStream(
+            DJI_LIVEVIEW_CAMERA_POSITION_NO_1,
+            DJI_LIVEVIEW_CAMERA_SOURCE_M4E_VIS);
+        if (stopCode != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+            g_liveviewSubscribeErrorCode.store(static_cast<uint64_t>(stopCode));
+            USER_LOG_WARN("Stop before liveview retry gagal, code=0x%08llX",
+                          static_cast<unsigned long long>(stopCode));
+            g_statusValue.store(5);
+            g_nextStreamRetryNs = now + g_reconnectIntervalNs;
+            return;
+        }
+        g_imageStreamStarted = false;
+    }
+    if (!StartImageSubscription()) {
         g_statusValue.store(5);
     }
-    g_lastFrameArrivalNs.store(now);
+    g_nextStreamRetryNs = now + g_reconnectIntervalNs;
 }
 
 void UpdatePilotStatus(const RenderResult &result)
@@ -1212,10 +1269,20 @@ int main()
         return 2;
     }
     g_ipcDirectory = ipc;
+    const char *inputMode = std::getenv("GAP_PLOT_AI_LIVEVIEW_INPUT_MODE");
+    if (inputMode != nullptr && inputMode[0] != '\0') {
+        g_liveviewInputMode = inputMode;
+    }
     g_renderedStreamEnabled = EnvironmentFlag("GAP_PLOT_AI_ENABLE_RENDERED_STREAM");
     g_staticOverlayDebug = EnvironmentFlag("GAP_PLOT_AI_STATIC_OVERLAY_DEBUG");
     g_staleResultTimeoutNs =
         EnvironmentMilliseconds("GAP_PLOT_AI_STALE_RESULT_TIMEOUT_MS", 1500) *
+        1'000'000ULL;
+    g_streamTimeoutNs =
+        EnvironmentMilliseconds("GAP_PLOT_AI_STREAM_TIMEOUT_MS", 5000) *
+        1'000'000ULL;
+    g_reconnectIntervalNs =
+        EnvironmentMilliseconds("GAP_PLOT_AI_RECONNECT_INTERVAL_MS", 5000) *
         1'000'000ULL;
     const uint64_t workerHeartbeatTimeoutMs =
         EnvironmentMilliseconds("GAP_PLOT_AI_WORKER_HEARTBEAT_TIMEOUT_MS", 3000);
@@ -1266,7 +1333,7 @@ int main()
         uint64_t lastParsedFrame = std::numeric_limits<uint64_t>::max();
         uint64_t lastStatusUpdate = 0;
         bool pilotOverlayCleared = true;
-        while (!g_stop.load()) {
+        while (!g_stop.load() && g_signalStop == 0) {
             RenderResult parsed;
             if (ParseResultFile(&parsed) && parsed.frameIndex != lastParsedFrame) {
                 lastParsedFrame = parsed.frameIndex;
@@ -1306,6 +1373,20 @@ int main()
                         current.status = "ERROR";
                         current.lastError = "STATIC_OVERLAY_UNAVAILABLE: cek PSDK/firmware";
                     }
+                } else if (!g_imageStreamStarted ||
+                           g_liveviewSubscribeErrorCode.load() != 0) {
+                    current.status = "ERROR";
+                    std::ostringstream error;
+                    error << "LIVEVIEW_STREAM_ERROR: decoded M4E RGB unavailable/stalled";
+                    if (g_liveviewSubscribeErrorCode.load() != 0) {
+                        error << ", code=0x" << std::hex
+                              << g_liveviewSubscribeErrorCode.load();
+                    }
+                    error << "; retry is active, H.264 fallback is not compiled";
+                    current.lastError = error.str();
+                    current.boxes.clear();
+                    current.contours.clear();
+                    g_statusValue.store(5);
                 } else if (controls.running &&
                            !WorkerHeartbeatHealthy(workerHeartbeatTimeoutMs)) {
                     current.status = "ERROR";

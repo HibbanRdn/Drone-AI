@@ -40,7 +40,11 @@ environment, cache, dan output runtime tetap lokal.
 
 ~~~bash
 git clone https://github.com/HibbanRdn/Drone-AI.git
+git clone --branch 3.16.0 --depth 1 \
+  https://github.com/dji-sdk/Payload-SDK.git Payload-SDK-3.16.0
 cd Drone-AI
+export PSDK_ROOT="$(cd ../Payload-SDK-3.16.0 && pwd)"
+python3 scripts/verify_psdk_316.py "$PSDK_ROOT"
 git lfs install
 git lfs pull
 python3 scripts/model_preflight.py
@@ -250,12 +254,13 @@ Lihat [live app](docs/manifold_live_app.md), [hardware acceptance](docs/manifold
 [audit artifact](docs/artifact_audit.md), [audit lokal](docs/audit.md), [inventory
 Manifold](docs/manifold_inventory.md), [readiness build/package/upload
 Manifold](docs/manifold_readiness.md), [validasi
-model](docs/model_validation.md), [validasi PSDK](docs/psdk_validation.md), dan
-[ground test](docs/ground_test.md).
+model](docs/model_validation.md), [validasi PSDK](docs/psdk_validation.md),
+[audit lokal PSDK](docs/local_psdk_alignment.md), [deployment offline](docs/manifold_offline_deployment.md),
+dan [ground test](docs/ground_test.md).
 
 Referensi resmi: [Manifold quick
 demo](https://developer.dji.com/doc/payload-sdk-tutorial/en/manifold-quick-start/quick-demo.html),
-[Liveview](https://developer.dji.com/doc/payload-sdk-tutorial/en/advanced-function/liveview.html),
+[Liveview](https://developer.dji.com/doc/payload-sdk-api-reference/en/practice/liveview.html),
 [Custom Widget](https://developer.dji.com/doc/payload-sdk-tutorial/en/basic-function/custom-widget.html),
 [build DPK](https://developer.dji.com/doc/payload-sdk-tutorial/en/manifold-quick-start/build-dpk.html),
 dan [application

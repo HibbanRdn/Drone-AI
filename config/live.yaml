@@ -7,12 +7,20 @@ app:
 
 live:
   camera: M4E_VIS
+  input_mode: decoded_rgb
+  decoded_pixel_format: RGB_PACKED
+  h264_fallback:
+    enabled: false
+    decoder: official_sample_ffmpeg4
+    frame_queue_size: 1
+    drop_old_frames: true
   target_inference_fps: 1.5
   frame_queue_size: 1
   drop_old_frames: true
   batch_size: 1
   warmup_before_running: true
   stream_timeout_ms: 5000
+  reconnect_interval_ms: 5000
   worker_heartbeat_timeout_ms: 3000
 
 runtime:

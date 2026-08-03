@@ -19,9 +19,12 @@ export GAP_PLOT_AI_APP_ROOT="${PAYLOAD_DIR}"
 export GAP_PLOT_AI_RUNTIME_ROOT="${APP_DIR}/data/runtime"
 export GAP_PLOT_AI_IPC_DIR="${IPC_DIR}"
 export GAP_PLOT_AI_WIDGET_DIR="${PAYLOAD_DIR}/share/config/widget"
-export GAP_PLOT_AI_STALE_RESULT_TIMEOUT_MS="${GAP_PLOT_AI_STALE_RESULT_TIMEOUT_MS:-1500}"
-export GAP_PLOT_AI_WORKER_HEARTBEAT_TIMEOUT_MS="${GAP_PLOT_AI_WORKER_HEARTBEAT_TIMEOUT_MS:-3000}"
 export GAP_PLOT_AI_ENABLE_RENDERED_STREAM="${GAP_PLOT_AI_ENABLE_RENDERED_STREAM:-0}"
+
+live_assignments="$("${PYTHON_BIN}" "${PAYLOAD_DIR}/bin/live_config_env.py" "${CONFIG}")"
+while IFS= read -r live_assignment; do
+  export "${live_assignment}"
+done <<< "${live_assignments}"
 
 "${PYTHON_BIN}" -m gap_plot_ai.worker \
   --config "${CONFIG}" --ipc-dir "${IPC_DIR}" --backend engine \

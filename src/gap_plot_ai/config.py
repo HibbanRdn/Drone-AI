@@ -210,6 +210,29 @@ def validate_config(
             raise ConfigError("Section 'live' harus berupa mapping.")
         if live.get("camera") != "M4E_VIS":
             raise ConfigError("live.camera harus M4E_VIS.")
+        if live.get("input_mode") != "decoded_rgb":
+            raise ConfigError(
+                "live.input_mode harus decoded_rgb pada target Manifold 3; "
+                "fallback H.264 belum menjadi bagian binary aplikasi."
+            )
+        if live.get("decoded_pixel_format") != "RGB_PACKED":
+            raise ConfigError("live.decoded_pixel_format harus RGB_PACKED.")
+        h264_fallback = live.get("h264_fallback")
+        if not isinstance(h264_fallback, dict):
+            raise ConfigError("live.h264_fallback wajib berupa mapping eksplisit.")
+        if h264_fallback.get("enabled") is not False:
+            raise ConfigError(
+                "live.h264_fallback.enabled harus false sampai decoder FFmpeg "
+                "target lulus build dan hardware test."
+            )
+        if h264_fallback.get("decoder") != "official_sample_ffmpeg4":
+            raise ConfigError(
+                "live.h264_fallback.decoder harus mencatat official_sample_ffmpeg4."
+            )
+        if int(h264_fallback.get("frame_queue_size", 0)) != 1:
+            raise ConfigError("live.h264_fallback.frame_queue_size harus 1.")
+        if h264_fallback.get("drop_old_frames") is not True:
+            raise ConfigError("live.h264_fallback.drop_old_frames harus true.")
         if int(live.get("frame_queue_size", 0)) != 1:
             raise ConfigError("live.frame_queue_size harus 1.")
         if live.get("drop_old_frames") is not True:
@@ -220,6 +243,8 @@ def validate_config(
             raise ConfigError("live.target_inference_fps harus positif.")
         if int(live.get("stream_timeout_ms", 0)) < 1000:
             raise ConfigError("live.stream_timeout_ms minimal 1000 ms.")
+        if int(live.get("reconnect_interval_ms", 0)) < 1000:
+            raise ConfigError("live.reconnect_interval_ms minimal 1000 ms.")
         if int(live.get("worker_heartbeat_timeout_ms", 0)) < 1000:
             raise ConfigError("live.worker_heartbeat_timeout_ms minimal 1000 ms.")
 

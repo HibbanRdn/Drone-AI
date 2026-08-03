@@ -16,6 +16,11 @@ coordinate space 0–10.000, dan `boxCount` bertipe `uint8_t`. Karena itu
 `overlay.max_objects: auto` menjadi batas ABI 255; batas operasional Pilot
 tetap harus diuji pada hardware.
 
+Checkout vendor diberikan melalui `PSDK_ROOT`; CMake juga membaca environment
+tersebut secara langsung. Verifier menolak fork/mirror, versi/tag lain, vendor
+diff, library aarch64 dengan checksum berbeda, dan sample/header Liveview yang
+tidak lengkap.
+
 Source Manifold tervalidasi tidak dapat dibaca karena SSH `192.168.42.120`
 timeout. Benchmark TensorRT 30 frame dan keputusan
 `enable_center_suppression: false` diperlakukan sebagai kontrak operator,
@@ -49,9 +54,10 @@ karena plot contour bukan gap detection dan rendered-stream path belum lulus
 hardware test.
 
 Jika decoded RGB ditolak firmware/PSDK, app masuk error
-`Decoded M4E RGB stream unavailable`. Source tidak membuat decoder H.264
-fiktif. Fallback baru boleh ditambah setelah failure aktual dibuktikan dan
-decoder target dipilih serta divalidasi.
+`LIVEVIEW_STREAM_ERROR`, tetap hidup, dan mencoba stop/start subscription
+dengan interval terkonfigurasi. Source tidak membuat decoder H.264 fiktif.
+Sample resmi H.264 memakai `DJICameraStreamDecoder` dan FFmpeg 4.x; fallback
+baru boleh diaktifkan setelah dependency itu dibangun dan diuji pada target.
 
 ## Config inference
 
@@ -60,11 +66,19 @@ NMS tetap satu sumber.
 
 ```yaml
 live:
+  input_mode: decoded_rgb
+  decoded_pixel_format: RGB_PACKED
+  h264_fallback:
+    enabled: false
+    frame_queue_size: 1
+    drop_old_frames: true
   target_inference_fps: 1.5
   frame_queue_size: 1
   drop_old_frames: true
   batch_size: 1
   warmup_before_running: true
+  stream_timeout_ms: 5000
+  reconnect_interval_ms: 5000
 models:
   detector:
     tile_size: 1024
@@ -115,6 +129,10 @@ dipakai benchmark device:
 5. bukti `model_load_count=1`, `backend_initialization_count=1`,
    `warmup_count=1`; wrapper menunda validasi metadata class sampai predictor
    persisten siap agar akses `model.names` tidak membuat backend sementara.
+
+Environment native untuk timeout, reconnect, heartbeat, dan stale overlay
+dirender dari config tervalidasi oleh `scripts/live_config_env.py`; launcher
+tidak menyimpan salinan angka yang berbeda.
 
 ```bash
 export PSDK_ROOT=/path/to/official/Payload-SDK-3.16.0
@@ -216,3 +234,12 @@ dji_app_ctl install -i /path/to/ggp-drone-ai_v00.01.00.00.dpk
 dji_app_ctl status ggp-drone-ai
 dji_app_ctl start ggp-drone-ai
 ```
+
+## Deployment offline source + PSDK
+
+Generator source-only tersedia di `scripts/create_offline_deployment.py`.
+Generator menolak worktree kotor, sehingga final Git bundle sengaja belum boleh
+dibuat sebelum diff disetujui dan di-commit. Paket final berisi bundle aplikasi,
+bundle exact tag PSDK, manifest commit/size/SHA-256, verifier, installer release
+non-destructive, build script, transfer `scp`, dan rollback symlink. Lihat
+`docs/manifold_offline_deployment.md`.

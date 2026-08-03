@@ -10,6 +10,9 @@ TARGET_PYTHON_FILES = sorted((APP_ROOT / "src" / "gap_plot_ai").glob("*.py")) + 
     APP_ROOT / "scripts" / "psdk_credentials.py",
     APP_ROOT / "scripts" / "check_manifold_ai_runtime.py",
     APP_ROOT / "scripts" / "verify_psdk_316.py",
+    APP_ROOT / "scripts" / "live_config_env.py",
+    APP_ROOT / "scripts" / "create_offline_deployment.py",
+    APP_ROOT / "deployment" / "offline" / "verify_package.py",
 ]
 
 

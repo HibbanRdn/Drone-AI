@@ -49,6 +49,9 @@ def test_live_config_extends_baseline_without_second_threshold_source() -> None:
     assert live["models"]["detector"]["tile_size"] == base["models"]["detector"]["tile_size"]
     assert live["models"]["detector"]["confidence_threshold"] == base["models"]["detector"]["confidence_threshold"]
     assert live["models"]["detector"]["enable_center_suppression"] is False
+    assert live["live"]["input_mode"] == "decoded_rgb"
+    assert live["live"]["decoded_pixel_format"] == "RGB_PACKED"
+    assert live["live"]["h264_fallback"]["enabled"] is False
     assert live["live"]["frame_queue_size"] == 1
     assert live["models"]["segmenter"]["enabled"] is False
 

@@ -33,9 +33,12 @@ export GAP_PLOT_AI_APP_ROOT="${APP_ROOT}"
 export PLOT_GAP_ROOT="${PLOT_GAP_ROOT:-${APP_ROOT}}"
 export GAP_PLOT_AI_IPC_DIR="${IPC_DIR}"
 export GAP_PLOT_AI_WIDGET_DIR="${SOURCE_ROOT}/config/widget"
-export GAP_PLOT_AI_STALE_RESULT_TIMEOUT_MS="${GAP_PLOT_AI_STALE_RESULT_TIMEOUT_MS:-1500}"
-export GAP_PLOT_AI_WORKER_HEARTBEAT_TIMEOUT_MS="${GAP_PLOT_AI_WORKER_HEARTBEAT_TIMEOUT_MS:-3000}"
 export GAP_PLOT_AI_ENABLE_RENDERED_STREAM="${GAP_PLOT_AI_ENABLE_RENDERED_STREAM:-0}"
+
+live_assignments="$("${PYTHON_BIN}" "${SOURCE_ROOT}/scripts/live_config_env.py" "${CONFIG}")"
+while IFS= read -r live_assignment; do
+  export "${live_assignment}"
+done <<< "${live_assignments}"
 
 rm -f "${IPC_DIR}/worker_status.json" "${IPC_DIR}/latest_result.txt"
 "${PYTHON_BIN}" -m gap_plot_ai.worker \

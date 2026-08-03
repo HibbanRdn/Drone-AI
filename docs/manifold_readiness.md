@@ -20,8 +20,9 @@ belum dijalankan dalam audit.
 - runtime membuat `data/logs` serta `runtime/ipc`, `runtime/reports`, dan
   session bounded;
 - build/engine/runtime melakukan preflight kapasitas disk;
-- report, credential, build output, dan DPK tetap ignored Git; model PT/ONNX
-  wajib tersedia melalui Git LFS, sedangkan engine ditambahkan setelah build target.
+- report, credential tambahan, build output, dan DPK tetap ignored Git;
+  identitas aplikasi PSDK sudah committed, model PT/ONNX wajib tersedia melalui
+  Git LFS, sedangkan engine ditambahkan setelah build target.
 
 ## Blocker sebelum build AI
 
@@ -30,8 +31,7 @@ belum dijalankan dalam audit.
   dibuktikan;
 - ONNX kedua model sudah tersedia melalui Git LFS dan checksum-nya diverifikasi;
 - engine FP16 belum dibangun dan belum diuji;
-- credential lokal lengkap termasuk `DJI_DEVELOPER_ACCOUNT` belum boleh
-  diasumsikan hanya dari report.
+- aktivasi identitas aplikasi PSDK committed belum diuji pada hardware.
 
 Setelah dependency target disiapkan secara terpisah dan disetujui operator,
 jalankan preflight read-only pada Manifold:
@@ -52,7 +52,6 @@ dijalankan:
 ```bash
 export PSDK_ROOT="/path/on/manifold/Payload-SDK-3.16.0"
 export GAP_PLOT_AI_APP_ROOT="/home/dji/gap_plot_ai_dev/source"
-export GAP_PLOT_AI_SECRETS_FILE="/home/dji/gap_plot_ai_dev/config/secrets.env"
 
 "$GAP_PLOT_AI_APP_ROOT/scripts/build_psdk_sample.sh"
 "$GAP_PLOT_AI_APP_ROOT/scripts/build_engine.sh"

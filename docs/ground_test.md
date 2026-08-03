@@ -7,7 +7,7 @@ Prasyarat:
 - inventory Manifold sudah ditinjau;
 - preflight `--phase engine` dan `--phase runtime` lulus;
 - tidak ada update firmware/OS/JetPack/CUDA/TensorRT;
-- credential dimasukkan lokal dan tidak dicetak;
+- identitas aplikasi PSDK committed sudah ditinjau dan tidak dicetak ke log;
 - official PSDK sample gate sudah lulus;
 - ONNX dan FP16 engine checksum tercatat;
 - parity engine lulus;

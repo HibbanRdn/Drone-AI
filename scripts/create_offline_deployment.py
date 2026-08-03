@@ -267,7 +267,7 @@ def create_package(app_root: Path, psdk_root: Path, output_dir: Path) -> Path:
                 "datasets",
                 "runtime sessions/logs",
                 "inference output",
-                "credentials and private config",
+                "untracked credential files and private config",
                 "build caches",
             ],
             "artifacts": artifacts,

@@ -5,7 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TARGET="${MANIFOLD_SSH_TARGET:?Set MANIFOLD_SSH_TARGET, mis. alias SSH yang sudah dikonfigurasi}"
 REMOTE_ROOT="${MANIFOLD_DEV_ROOT:-/home/dji/gap_plot_ai_dev}"
-SECRETS="${GAP_PLOT_AI_SECRETS_FILE:-${SOURCE_ROOT}/config/secrets.env}"
 ARCHIVE="$(mktemp -t gap_plot_ai_source.XXXXXX.tar.gz)"
 trap 'rm -f "${ARCHIVE}"' EXIT
 
@@ -19,14 +18,7 @@ scp -q "${ARCHIVE}" "${TARGET}:${REMOTE_ROOT}/source/gap_plot_ai.tar.gz"
 ssh -o BatchMode=yes "${TARGET}" \
   "tar -xzf '${REMOTE_ROOT}/source/gap_plot_ai.tar.gz' -C '${REMOTE_ROOT}/source'"
 
-if [[ -f "${SECRETS}" ]]; then
-  "${SOURCE_ROOT}/scripts/psdk_credentials.py" validate --secrets "${SECRETS}"
-  scp -q "${SECRETS}" "${TARGET}:${REMOTE_ROOT}/config/secrets.env.tmp"
-  ssh -o BatchMode=yes "${TARGET}" \
-    "chmod 600 '${REMOTE_ROOT}/config/secrets.env.tmp' && mv '${REMOTE_ROOT}/config/secrets.env.tmp' '${REMOTE_ROOT}/config/secrets.env'"
-fi
-
 printf '%s\n' \
   "Development source transferred to ${TARGET}:${REMOTE_ROOT}/source" \
   "Set GAP_PLOT_AI_APP_ROOT=${REMOTE_ROOT}/source" \
-  "Set GAP_PLOT_AI_SECRETS_FILE=${REMOTE_ROOT}/config/secrets.env"
+  "PSDK application identity is included in the private application source"

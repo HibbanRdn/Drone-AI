@@ -43,7 +43,7 @@
 #include "hal_usb_bulk.h"
 
 #ifdef GAP_PLOT_AI_COMPILED_APP_INFO
-#include "dji_sdk_app_info.generated.h"
+#include "dji_sdk_app_info.h"
 #endif
 
 namespace {

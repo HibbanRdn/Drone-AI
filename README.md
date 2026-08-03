@@ -34,9 +34,10 @@ tools/b0_manual_v1_video_demo; hasilnya tidak diklaim sebagai output live PSDK.
 
 ## Clone sampai dev-run
 
-Semua source, model, config, exporter, TensorRT builder, PSDK frontend, dan
-source post-processing berada di repository. Raw dataset/video, credential,
-environment, cache, dan output runtime tetap lokal.
+Semua source, model, config, exporter, TensorRT builder, PSDK frontend,
+identitas aplikasi PSDK, dan source post-processing berada di repository.
+Raw dataset/video, environment privat lain, cache, dan output runtime tetap
+lokal.
 
 ~~~bash
 git clone https://github.com/HibbanRdn/Drone-AI.git
@@ -152,15 +153,11 @@ Preflight target yang tidak menginstal apa pun:
 .venv/bin/python scripts/check_manifold_ai_runtime.py --phase runtime
 ```
 
-Credential portal tersimpan hanya di `config/secrets.env` yang ignored dan
-berizin `600`. `scripts/psdk_credentials.py` memvalidasi ukuran buffer resmi
-dan menghasilkan `runtime/generated/dji_sdk_app_info.generated.h` saat build.
-Header generated juga ignored/berizin `600`, tidak mengubah header repo PSDK,
-dan dilarang masuk DPK staging. Nilai sensitif tidak dicetak oleh validator.
-
-PSDK juga mewajibkan `DJI_DEVELOPER_ACCOUNT` (email akun developer) pada
-`T_DjiUserInfo.developerAccount[64]`. Field ini tidak ada pada screenshot dan
-harus diisi lokal sebelum build perangkat; jangan kirim nilainya melalui chat.
+Identitas aplikasi PSDK berada di `config/dji_sdk_app_info.h` dan ikut dalam
+repository privat serta Git bundle offline. Build aplikasi dan sample resmi
+memakai header yang sama, sehingga Windows dan Manifold tidak memerlukan file
+`.env` atau provisioning credential terpisah. Source DJI tetap tidak diubah;
+sample resmi menerima salinan sementara header melalui compiler `-include`.
 
 ## Gate sample resmi PSDK
 
@@ -169,13 +166,12 @@ Pada Manifold, gunakan checkout upstream resmi exact tag PSDK `3.16.0`
 tag, commit, header versi, dan SHA-256 library aarch64 sebelum konfigurasi.
 Target yang
 dipakai adalah sample C++ `dji_sdk_demo_on_manifold3_cxx`; sample C tidak
-diubah. Build menginjeksi header generated dengan compiler `-include`, sehingga
-header resmi PSDK tetap tidak berisi credential plaintext.
+diubah. Build menginjeksi header aplikasi dengan compiler `-include`, sehingga
+checkout resmi PSDK tetap bersih.
 
 ```bash
 export PSDK_ROOT="/path/on/manifold/Payload-SDK-3.16.0"
 export GAP_PLOT_AI_APP_ROOT="/home/dji/gap_plot_ai_dev/source"
-export GAP_PLOT_AI_SECRETS_FILE="/home/dji/gap_plot_ai_dev/config/secrets.env"
 "$GAP_PLOT_AI_APP_ROOT/scripts/build_psdk_sample.sh"
 ```
 
@@ -198,7 +194,6 @@ environment target identik:
 ```bash
 export PSDK_ROOT="/path/on/manifold/Payload-SDK-3.16.0"
 export GAP_PLOT_AI_APP_ROOT="/home/dji/gap_plot_ai_dev/source"
-export GAP_PLOT_AI_SECRETS_FILE="/home/dji/gap_plot_ai_dev/config/secrets.env"
 
 "$GAP_PLOT_AI_APP_ROOT/scripts/build_engine.sh"
 "$GAP_PLOT_AI_APP_ROOT/scripts/benchmark_engine.sh"
@@ -213,11 +208,10 @@ environment yang didokumentasikan script. Build engine memakai TensorRT
 runtime dan tidak mewajibkan `nvcc`. ONNX adalah format pertukaran; engine dari
 macOS, Windows x86, GPU lain, CUDA lain, atau TensorRT lain tidak digunakan.
 
-`deploy_dev.sh` mengecualikan secret dari source archive, lalu mentransfer file
-credential secara terpisah ke `/home/dji/gap_plot_ai_dev/config/secrets.env`
-dengan permission `600`. Runtime native memakai identitas yang sudah
-dikompilasi, tidak memasukkan `.env` ke DPK, serta membuat `data/logs` dan
-direktori IPC sebelum `DjiCore_Init`. Runtime:
+`deploy_dev.sh` mentransfer source termasuk header identitas aplikasi yang
+committed; tidak ada transfer `.env` terpisah. Runtime native memakai identitas
+yang dikompilasi serta membuat `data/logs` dan direktori IPC sebelum
+`DjiCore_Init`. Runtime:
 
 ```bash
 "$GAP_PLOT_AI_APP_ROOT/scripts/run_dev.sh"

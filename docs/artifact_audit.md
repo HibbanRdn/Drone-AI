@@ -18,7 +18,8 @@ Audit terakhir 3 Agustus 2026.
 
 Yang sengaja tidak masuk:
 
-- credential dan environment file asli;
+- credential tambahan dan environment privat; identitas aplikasi PSDK yang
+  diperlukan untuk build offline berada di `config/dji_sdk_app_info.h`;
 - virtualenv atau dependency terinstal;
 - raw training dataset, raw flight video/SRT;
 - runtime cache, log, report, IPC, preview, dan temporary inference output;

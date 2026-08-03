@@ -27,7 +27,7 @@
 ## Requires Manifold build
 
 - CMake configure/link against aarch64 `libpayloadsdk.a`;
-- official Manifold 3 sample build with local portal credential;
+- official Manifold 3 sample build with the committed application identity;
 - Python 3.8/TensorRT/CUDA/TorchVision target imports and existing engine;
 - DPK tool execution and firmware range validation.
 

@@ -6,9 +6,8 @@ SOURCE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 APP_ROOT="${GAP_PLOT_AI_APP_ROOT:-${SOURCE_ROOT}}"
 PSDK_ROOT="${PSDK_ROOT:?Set PSDK_ROOT ke Payload-SDK 3.16.0 pada Manifold}"
 BUILD_DIR="${PSDK_SAMPLE_BUILD_DIR:-${APP_ROOT}/build/official_psdk_sample_3.16.0}"
-SECRETS="${GAP_PLOT_AI_SECRETS_FILE:-${APP_ROOT}/config/secrets.env}"
-GENERATED_HEADER="${APP_ROOT}/runtime/generated/dji_sdk_app_info.generated.h"
-PYTHON_BIN="${GAP_PLOT_AI_CREDENTIAL_PYTHON:-python3}"
+APP_INFO_HEADER="${GAP_PLOT_AI_APP_INFO_HEADER:-${SOURCE_ROOT}/config/dji_sdk_app_info.h}"
+PYTHON_BIN="${GAP_PLOT_AI_PYTHON:-python3}"
 PRIVATE_HEADER_STAGE=""
 
 cleanup_private_header() {
@@ -23,17 +22,17 @@ if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "aarch64" ]]; then
   exit 2
 fi
 "${PYTHON_BIN}" "${SOURCE_ROOT}/scripts/verify_psdk_316.py" "${PSDK_ROOT}"
-"${PYTHON_BIN}" "${SOURCE_ROOT}/scripts/psdk_credentials.py" validate \
-  --secrets "${SECRETS}" --require-runtime
-"${PYTHON_BIN}" "${SOURCE_ROOT}/scripts/psdk_credentials.py" generate \
-  --secrets "${SECRETS}" --output "${GENERATED_HEADER}" --require-runtime
+if [[ ! -f "${APP_INFO_HEADER}" ]]; then
+  echo "PSDK app identity header tidak ditemukan: ${APP_INFO_HEADER}" >&2
+  exit 3
+fi
 
-# The upstream sample accepts credentials through CMAKE_CXX_FLAGS. Stage the
-# private header under /tmp so a workspace path containing spaces is not split
+# The upstream sample accepts app identity through CMAKE_CXX_FLAGS. Stage the
+# committed header under /tmp so a workspace path containing spaces is not split
 # by the upstream CMake command line. Nothing is written into the DJI checkout.
 PRIVATE_HEADER_STAGE="$(mktemp -d /tmp/gap_plot_ai_psdk_credentials.XXXXXX)"
 STAGED_HEADER="${PRIVATE_HEADER_STAGE}/dji_sdk_app_info.generated.h"
-install -m 0600 "${GENERATED_HEADER}" "${STAGED_HEADER}"
+install -m 0600 "${APP_INFO_HEADER}" "${STAGED_HEADER}"
 
 cmake -S "${PSDK_ROOT}" -B "${BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE=Release \

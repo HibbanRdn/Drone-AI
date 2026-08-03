@@ -3,8 +3,9 @@
 ## Scope
 
 Paket ini memindahkan source yang dapat diaudit, bukan runtime AI. TensorRT
-8.5.2.2, CUDA 11.4, Python 3.8.10, environment Python target, credential lokal,
-dan engine yang sudah tervalidasi tetap berada di Manifold dan tidak dibundle.
+8.5.2.2, CUDA 11.4, Python 3.8.10, environment Python target, dan engine yang
+sudah tervalidasi tetap berada di Manifold. Identitas aplikasi PSDK ikut di
+Git bundle aplikasi sehingga tidak memerlukan provisioning `.env` terpisah.
 Tidak ada command ke Manifold yang dijalankan saat paket dibuat di Mac.
 
 ## Prasyarat lokal
@@ -23,8 +24,9 @@ python3 scripts/create_offline_deployment.py \
 - origin aplikasi selain `HibbanRdn/Drone-AI`;
 - diff atau untracked file;
 - checkout PSDK selain origin resmi, exact tag/commit 3.16.0, dan clean;
-- `.venv`, engine, dataset, media, runtime output, credential, private config,
-  atau cache build yang tracked.
+- `.venv`, engine, dataset, media, runtime output, credential tambahan yang
+  tidak merupakan identitas aplikasi committed, private config, atau cache
+  build yang tracked.
 
 Karena generator memakai Git bundle, PT/ONNX di branch hanya menjadi pointer
 LFS. Object LFS tidak dimasukkan: source build/runtime Manifold memakai engine
@@ -89,6 +91,6 @@ symlink, aktivasi ditolak. Bila ada symlink lama, targetnya direkam di
 ## Batas verifikasi
 
 Generator, manifest, exclusion, template, dan checksum dapat diuji di macOS.
-Build Linux aarch64, credential/activation PSDK, decoded/H.264 stream, overlay
+Build Linux aarch64, aktivasi identitas PSDK, decoded/H.264 stream, overlay
 Pilot, DPK, TensorRT, serta aircraft reconnect hanya dapat diverifikasi pada
 Manifold 3 + Matrice 4E + Pilot 2.

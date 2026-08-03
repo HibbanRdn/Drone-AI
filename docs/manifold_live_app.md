@@ -137,7 +137,6 @@ tidak menyimpan salinan angka yang berbeda.
 ```bash
 export PSDK_ROOT=/path/to/official/Payload-SDK-3.16.0
 export GAP_PLOT_AI_APP_ROOT=/home/dji/gap_plot_ai_dev/source
-export GAP_PLOT_AI_SECRETS_FILE=/home/dji/gap_plot_ai_dev/config/secrets.env
 
 ./scripts/build_psdk_sample.sh
 ./scripts/mark_psdk_verified.sh --official-sample-liveview-and-widget-passed
@@ -202,9 +201,10 @@ target diverifikasi. Tidak ada SHP atau gap geolocation.
 
 DPK final hanya dibangun di Linux aarch64. Gate mewajibkan PSDK liveview,
 engine parity, ground test, runtime bundle, firmware `ver_min/ver_max`, native
-binary, Python target bundle, dan engine. Script membuat staging, menolak
-credential, memvalidasi manifest, memanggil tool resmi PSDK, dan menulis
-SHA-256. Ini gate nyata, bukan DPK mock.
+binary, Python target bundle, dan engine. Script membuat staging, menolak file
+`.env`/credential tambahan, memvalidasi manifest, memanggil tool resmi PSDK,
+dan menulis SHA-256. Identitas PSDK sudah terkompilasi ke binary native. Ini
+gate nyata, bukan DPK mock.
 
 Tool DJI hanya memasukkan executable `bin` dan entry `userconfig`. Karena itu
 bundle lengkap ditempatkan di `payload/` dan manifest memasukkan direktori itu:

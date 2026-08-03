@@ -1,9 +1,10 @@
 # Transfer dan instalasi offline
 
 Paket ini berisi source Git aplikasi pada commit `@APP_COMMIT@` dan checkout
-resmi Payload SDK tag `@PSDK_TAG@` pada commit `@PSDK_COMMIT@`. Paket tidak
-berisi credential, virtual environment, TensorRT engine, dataset, media flight,
-atau output inference.
+resmi Payload SDK tag `@PSDK_TAG@` pada commit `@PSDK_COMMIT@`. Identitas
+aplikasi PSDK berada di bundle Drone-AI; paket tidak berisi `.env` terpisah,
+virtual environment, TensorRT engine, dataset, media flight, atau output
+inference.
 
 ## Transfer dari Mac
 

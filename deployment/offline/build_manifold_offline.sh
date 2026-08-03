@@ -21,8 +21,7 @@ export PIP_NO_INDEX=1
 export GIT_TERMINAL_PROMPT=0
 export PSDK_ROOT
 export GAP_PLOT_AI_APP_ROOT="${APP_SOURCE}"
-export GAP_PLOT_AI_CREDENTIAL_PYTHON="${GAP_PLOT_AI_CREDENTIAL_PYTHON:-python3}"
-export GAP_PLOT_AI_SECRETS_FILE="${GAP_PLOT_AI_SECRETS_FILE:-${INSTALL_ROOT}/config/secrets.env}"
+export GAP_PLOT_AI_PYTHON="${GAP_PLOT_AI_PYTHON:-python3}"
 
 python3 "${APP_SOURCE}/scripts/verify_psdk_316.py" "${PSDK_ROOT}"
 "${APP_SOURCE}/scripts/build_psdk_sample.sh"

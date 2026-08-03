@@ -46,7 +46,7 @@ if [[ -n "${CXX_CHECK}" ]]; then
   "${CXX_CHECK}" -std=c++17 -fsyntax-only "${APP_ROOT}/src/psdk/main.cpp" \
     -DGAP_PLOT_AI_COMPILED_APP_INFO=1 \
     -I"${APP_ROOT}/include" \
-    -I"${APP_ROOT}/tests/fixtures" \
+    -I"${APP_ROOT}/config" \
     -I"${PSDK_ROOT}/psdk_lib/include" \
     -I"${PSDK_ROOT}/samples/sample_c++/platform/linux/common" \
     -I"${PSDK_ROOT}/samples/sample_c++/platform/linux/manifold3/hal"

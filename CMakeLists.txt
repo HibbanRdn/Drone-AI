@@ -13,9 +13,10 @@ endif()
 if(NOT DEFINED PSDK_ROOT OR PSDK_ROOT STREQUAL "")
   message(FATAL_ERROR "Set -DPSDK_ROOT=/path/to/official/Payload-SDK-3.16.0")
 endif()
-if(NOT DEFINED GAP_PLOT_AI_APP_INFO_HEADER)
-  message(FATAL_ERROR
-    "Set -DGAP_PLOT_AI_APP_INFO_HEADER to the generated private header")
+if(NOT DEFINED GAP_PLOT_AI_APP_INFO_HEADER OR
+   GAP_PLOT_AI_APP_INFO_HEADER STREQUAL "")
+  set(GAP_PLOT_AI_APP_INFO_HEADER
+      "${CMAKE_CURRENT_SOURCE_DIR}/config/dji_sdk_app_info.h")
 endif()
 
 get_filename_component(PSDK_ROOT "${PSDK_ROOT}" REALPATH)

@@ -38,6 +38,23 @@ def test_cmake_contract_matches_manifold_inventory() -> None:
     assert "aarch64-linux-gnu-gcc/libpayloadsdk.a" in cmake
     assert "target_compile_features(gap_plot_ai PRIVATE cxx_std_17)" in cmake
     assert 'DEFINED ENV{PSDK_ROOT}' in cmake
+    assert "config/dji_sdk_app_info.h" in cmake
+
+
+def test_committed_psdk_identity_is_complete() -> None:
+    header = (APP_ROOT / "config/dji_sdk_app_info.h").read_text(encoding="utf-8")
+    expected_lengths = {
+        "USER_APP_NAME": 12,
+        "USER_APP_ID": 6,
+        "USER_APP_KEY": 31,
+        "USER_APP_LICENSE": 88,
+        "USER_DEVELOPER_ACCOUNT": 19,
+        "USER_BAUD_RATE": 6,
+    }
+    for macro, expected_length in expected_lengths.items():
+        match = re.search(r'#define\s+{}\s+"([^"]+)"'.format(macro), header)
+        assert match is not None
+        assert len(match.group(1)) == expected_length
 
 
 def test_psdk_callback_only_replaces_latest_frame() -> None:
@@ -67,3 +84,5 @@ def test_official_sample_build_does_not_dirty_vendor_checkout() -> None:
     script = (APP_ROOT / "scripts/build_psdk_sample.sh").read_text(encoding="utf-8")
     assert "${APP_ROOT}/build/official_psdk_sample_3.16.0" in script
     assert "${PSDK_ROOT}/build_manifold3_official" not in script
+    assert "config/dji_sdk_app_info.h" in script
+    assert "psdk_credentials.py" not in script

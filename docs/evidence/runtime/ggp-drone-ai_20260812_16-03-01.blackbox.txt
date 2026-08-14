@@ -1,0 +1,33 @@
+[32m   0.000	            core	[Info]	               dji_core.c:115  Payload SDK Version : V3.16.0-beta.0-build.2338 Mar 11 2026 10:45:38[0m
+[32m08-12 16:03:01.696	            core	[Info]	               dji_core.c:147  Identify device : manifold3[0m
+[32m08-12 16:03:03.213	            core	[Info]	               dji_core.c:228  Identify AircraftType = Matrice 4E, MountPosition = Extension Port, SdkAdapterType = None[0m
+[32m08-12 16:03:03.213	            core	[Info]	    dji_identity_verify.c:646  Updating dji sdk policy file...[0m
+[32m08-12 16:03:04.213	            core	[Info]	    dji_identity_verify.c:654  Update dji sdk policy file successfully[0m
+[32m08-12 16:03:04.213	            user	[Info]	                 main.cpp:1412 Aircraft type=990 mountPositionType=5 adapter=3[0m
+[32m08-12 16:03:04.213	            core	[Info]	       dji_product_info.c:187  Set alias: drone-ai[0m
+[32m08-12 16:03:04.604	            user	[Info]	                 main.cpp:643  WIDGET_EN_PATH=/open_app/ggp-drone-ai/payload/share/config/widget/en_big_screen[0m
+[32m08-12 16:03:04.604	            user	[Info]	                 main.cpp:644  WIDGET_CN_PATH=/open_app/ggp-drone-ai/payload/share/config/widget/cn_big_screen[0m
+[32m08-12 16:03:04.605	            user	[Info]	                 main.cpp:648  Widget RegDefault result=0x00000000[0m
+[32m08-12 16:03:04.605	            user	[Info]	                 main.cpp:657  Widget RegEn result=0x00000000[0m
+[32m08-12 16:03:04.605	            user	[Info]	                 main.cpp:661  Widget RegCn result=0x00000000[0m
+[32m08-12 16:03:04.605	            core	[Info]	               dji_core.c:338  Start dji sdk application[0m
+[32m08-12 16:03:07.365	        liveview	[Info]	   dji_sdk_agent_decode.c:83   agent decode init success[0m
+[32m08-12 16:03:07.365	        liveview	[Info]	           dji_liveview.c:530  Agent stream init success[0m
+[32m08-12 16:03:08.898	        liveview	[Info]	   dji_sdk_agent_decode.c:104  request start agent liveview[0m
+[32m08-12 16:03:08.898	            user	[Info]	                 main.cpp:1171 Decoded M4E RGB liveview subscription active.[0m
+[32m08-12 16:03:08.898	            user	[Info]	                 main.cpp:1517 drone-ai ready, M4E visual stream requested; rendered_stream=0 static_overlay=0.[0m
+[32m08-12 16:03:10.036	        liveview	[Info]	   dji_sdk_agent_decode.c:147  request stop agent liveview[0m
+[32m08-12 16:03:10.038	             sub	[Info]	dji_data_subscription_dds_v3.c:272  DjiDataSubscriptionDds_v3_DeInit[0m
+[31m08-12 16:03:10.038	          linker	[Error]	            dji_command.c:769  Do not find command receive handle list.[0m
+[31m08-12 16:03:10.038	           infor	[Error]	     dji_sdk_state_push.c:345  Register aircraft information command handler error.[0m
+[31m08-12 16:03:10.038	            core	[Error]	     dji_sdk_state_push.c:175  DJI app status manager init error = 0x00000100[0m
+[31m08-12 16:03:10.038	            core	[Error]	               dji_core.c:374  Sdk state push deinit error[0m
+[31m08-12 16:03:10.038	          linker	[Error]	            dji_command.c:769  Do not find command receive handle list.[0m
+[31m08-12 16:03:10.038	            core	[Error]	dji_application_ready_state.c:158  Anti reg product information cmd handler error[0m
+[31m08-12 16:03:10.038	            core	[Error]	               dji_core.c:402  SDK connection management deinit error[0m
+2026-08-12 16:03:10.040 45745 45745 08-12 16:03:10.039  45745DUSS00 :DUSS	:	/system/lib/libsdk_agent.so(duss_log_dump_backtrace+0x2c) [0xffff6464cadc]
+2026-08-12 16:03:10.040 45745 45745 08-12 16:03:10.040  45745DUSS00 :DUSS	:	/system/lib/libduml_frwk.so(+0x1f0a34) [0xffff7cea8a34]
+2026-08-12 16:03:10.040 45745 45745 08-12 16:03:10.040  45745DUSS00 :DUSS	:	/lib/aarch64-linux-gnu/libc.so.6(+0x3647c) [0xffff8decb47c]
+2026-08-12 16:03:10.040 45745 45745 08-12 16:03:10.040  45745DUSS00 :DUSS	:	/lib/aarch64-linux-gnu/libc.so.6(+0x3660c) [0xffff8decb60c]
+2026-08-12 16:03:10.040 45745 45745 08-12 16:03:10.040  45745DUSS00 :DUSS	:	/lib/aarch64-linux-gnu/libc.so.6(__libc_start_main+0xec) [0xffff8deb5e14]
+2026-08-12 16:03:10.040 45745 45745 08-12 16:03:10.040  45745DUSS00 :DUSS	:	/open_app/ggp-drone-ai/bin/gap_plot_ai_native(+0xf508) [0xaaaaab75f508]

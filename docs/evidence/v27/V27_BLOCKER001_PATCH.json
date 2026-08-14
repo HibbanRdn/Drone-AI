@@ -1,0 +1,16 @@
+{
+  "phase": "D",
+  "blocker_fixed": "V26-SOFTWARE-BLOCKER-001",
+  "file": "/home/dji/drone_ai_dev/vnext-v27/source/src/gap_plot_ai/finalizer.py",
+  "change": "lines 483-484: (rc-cy) -> rc via pure helper _row_coords_to_local; helper added before analyze_gaps",
+  "v26_base_source_sha256": "5fae7a659e1e2dcd3b484912eb8862b72a09ed5515217a9931329ff38829ef45",
+  "v27_pre_patch_source_sha256": "5fae7a659e1e2dcd3b484912eb8862b72a09ed5515217a9931329ff38829ef45",
+  "v27_post_patch_source_sha256": "5cea0ab045b039139ff9047e202de73c8b208e87a690d7c6925d3e3d867adf34",
+  "v26_finalizer_sha256": "15a3cd2b7b8f5eb526bc12966fd5036109fdbf5018288f66c5ddca8488d1e844",
+  "v27_finalizer_sha256": "4b753d74ca84d0e8dd27150349622a48015ba1ca54a2fd166f0c3d1eaadf32eb",
+  "modified_files": [
+    "src/gap_plot_ai/finalizer.py"
+  ],
+  "py_compile": "OK",
+  "utc": "2026-08-12T11:38:25.902200+00:00"
+}

@@ -17,7 +17,7 @@ from .schema import FrameResult, ModelOutput, Telemetry
 from .state import AppState, StateMachine
 from .storage import SessionWriter
 from .tiling import predict_tiled_detector
-from .tensorrt_backend import DirectTensorRTModel
+from .tensorrt_backend import DirectTensorRTModel, DirectTensorRTSegmenterModel
 
 
 class InferenceRuntime:
@@ -106,11 +106,11 @@ class InferenceRuntime:
             detector = None
             segmenter = None
             if bool(detector_config["enabled"]):
-                detector = self._model_factory(
+                detector = DirectTensorRTModel(
                     detector_config, backend=self.backend, device=self._device
                 )
             if bool(segmenter_config["enabled"]):
-                segmenter = self._model_factory(
+                segmenter = DirectTensorRTSegmenterModel(
                     segmenter_config, backend=self.backend, device=self._device
                 )
             if detector is None and segmenter is None:
@@ -172,6 +172,8 @@ class InferenceRuntime:
             },
         )
         self._session_started_perf = time.perf_counter()
+        self._session_start_ts = time.perf_counter()
+        self._first_valid_frame = False
         self._processed = 0
         self._latency_window.clear()
         self._last_segmentation = None
@@ -225,6 +227,10 @@ class InferenceRuntime:
 
     def stop(self, status: str = "stopped") -> Optional[Path]:
         with self._inference_lock:
+            # v22: capture session_dir before closing writer
+            session_dir = self.writer.session_dir if self.writer is not None else None
+            config_snapshot = dict(self.config) if self.config else {}
+
             with self._lifecycle_lock:
                 state = self.state_machine.state
                 if state == AppState.IDLE:
@@ -235,8 +241,25 @@ class InferenceRuntime:
                     self._close_session(status)
                 self._last_segmentation = None
                 self._last_result = None
-                self.state_machine.transition(AppState.IDLE)
-                return self._last_summary
+                self.state_machine.transition(AppState.FINALIZING)
+                summary = self._last_summary
+
+            # v22: run finalizer after session close (Stop AI path)
+            if session_dir is not None and Path(session_dir).exists():
+                try:
+                    import sys
+                    print("[V22] finalizer_started session=%s" % Path(session_dir).name, file=sys.stderr)
+                    from .finalizer import finalize_session
+                    result = finalize_session(session_dir, config_snapshot)
+                    print("[V22] finalizer_complete status=%s plants=%d gaps=%s" % (
+                        result.status, result.plants_count,
+                        str(result.gaps_count) if result.gap_evaluated else "N/A"), file=sys.stderr)
+                except Exception:
+                    print("[V22] finalizer_failed", file=sys.stderr)
+                    import traceback; traceback.print_exc()
+
+            self.state_machine.transition(AppState.IDLE)
+            return summary
 
     def fail(self, code: str, message: str, *, session_status: str = "error") -> None:
         with self._inference_lock:
@@ -398,8 +421,15 @@ class InferenceRuntime:
             )
             contours = segment_output.contours if self.segmenter_enabled else []
             self._processed += 1
-            elapsed = max(time.perf_counter() - self._session_started_perf, 1e-9)
-            ai_fps = self._processed / elapsed
+            if not self._first_valid_frame:
+                self._first_valid_frame = True
+                self._session_start_perf_fps = time.perf_counter()
+                self._processed_fps = 0
+            self._processed_fps = self._processed_fps + 1 if hasattr(self, '_processed_fps') else 1
+            if not hasattr(self, '_session_start_perf_fps'):
+                self._session_start_perf_fps = self._session_started_perf
+            elapsed_fps = max(time.perf_counter() - self._session_start_perf_fps, 1e-9)
+            ai_fps = self._processed_fps / elapsed_fps
             model_version = {
                 "detector": self.detector.path.name if self.detector is not None else "disabled",
                 "segmenter": self.segmenter.path.name if self.segmenter is not None else "disabled",
@@ -436,8 +466,8 @@ class InferenceRuntime:
                     ),
                 },
                 inference_latency_ms=inference_ms,
-                aircraft_latitude=telemetry.aircraft_latitude,
-                aircraft_longitude=telemetry.aircraft_longitude,
+                aircraft_latitude=telemetry.aircraft_latitude if (telemetry.gps_signal_level or 0) > 0 else None,
+                aircraft_longitude=telemetry.aircraft_longitude if (telemetry.gps_signal_level or 0) > 0 else None,
                 relative_altitude=telemetry.relative_altitude,
                 absolute_altitude=telemetry.absolute_altitude,
                 gimbal_pitch=telemetry.gimbal_pitch,
@@ -449,6 +479,13 @@ class InferenceRuntime:
                 row_stride=row_stride or int(frame_bgr.strides[0]),
                 pixel_format=pixel_format or "BGR_PACKED",
                 gap_candidates=None,
+                gap_status={
+                    "enabled": False,
+                    "ran": False,
+                    "status": "pending_post_session",
+                    "skip_reason": "evaluated_during_finalization",
+                    "candidate_count": 0
+                },
                 overlay={
                     "enabled": bool(overlay_config["enabled"]),
                     "aspect_mode": str(overlay_config["aspect_mode"]),

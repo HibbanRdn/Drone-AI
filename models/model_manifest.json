@@ -55,14 +55,24 @@
       "required_after_clone": true
     }
   ],
-  "planned_engines": [
+  "manifold_engines": [
     {
-      "file": "models/engine/plant_center_manual_v1_b0_tensorrt-8.5.2_cuda-11.4_aarch64_fp16.engine",
-      "status": "not built; must be built and validated on Manifold 3 or identical target"
+      "runtime_path": "/home/dji/gap_plot_ai_assets/models/engine/plant_center_manual_v1_b0_best_fp16.engine",
+      "format": "TensorRT FP16 engine",
+      "sha256": "e5594f9e945791e5ef201b34ef429194a3338fa61ba576f35a2e63044480c600",
+      "size_bytes_observed": 8393084,
+      "function": "Manifold detector runtime engine",
+      "target_runtime": ["Manifold 3", "TensorRT 8.5.2.2", "CUDA 11.4", "aarch64"],
+      "repository_policy": "external runtime artifact; do not commit engine binary unless intentionally versioning target-specific engines with LFS"
     },
     {
-      "file": "models/engine/plot_segmenter_b4_selected_tensorrt-8.5.2_cuda-11.4_aarch64_fp16.engine",
-      "status": "not built; must be built and validated on Manifold 3 or identical target"
+      "runtime_path": "/home/dji/gap_plot_ai_assets/models/engine/plot_segmenter_b4_selected_best_fp16.engine",
+      "format": "TensorRT FP16 engine",
+      "sha256": "4d2684bdaef13a8fd678d66c9803970027d6c0afd00276125f9d95b463278605",
+      "size_bytes_observed": 25938413,
+      "function": "Manifold segmenter runtime engine",
+      "target_runtime": ["Manifold 3", "TensorRT 8.5.2.2", "CUDA 11.4", "aarch64"],
+      "repository_policy": "external runtime artifact; do not commit engine binary unless intentionally versioning target-specific engines with LFS"
     }
   ]
 }

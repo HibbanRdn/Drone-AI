@@ -87,6 +87,7 @@ class FrameResult:
     row_stride: Optional[int] = None
     pixel_format: Optional[str] = None
     gap_candidates: Optional[List[Dict[str, Any]]] = None
+    gap_status: Optional[Dict[str, Any]] = None
     overlay: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:

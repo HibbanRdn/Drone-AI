@@ -1,0 +1,23 @@
+{
+  "test": "V27-T03-gap-positive-moving-e2e",
+  "session": "/home/dji/drone_ai_dev/vnext-v27/fixtures/v27flash_gap_positive/SESSION_GAPPOS",
+  "registration": {
+    "accepted": 2,
+    "rejected": 0,
+    "transform_median_err_px": 0.37021037606430734,
+    "transform_max_err_px": 0.7107526409684144
+  },
+  "plants_expected": 49,
+  "plants_found": 49,
+  "gap_expected": 1,
+  "gap_found": 1,
+  "gap_status": "gaps_found",
+  "gap_position": [
+    519.9738538417059,
+    99.65645916389451
+  ],
+  "gap_position_err_px": 0.3445343635482496,
+  "row_end_false_gap": false,
+  "low_coverage_false_gap": false,
+  "result": "PASS"
+}

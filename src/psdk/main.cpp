@@ -34,6 +34,9 @@
 #include <dji_payload_camera.h>
 #include <dji_platform.h>
 #include <dji_widget.h>
+#include <dji_gimbal_manager.h>
+#include <dji_gimbal.h>
+#include <unistd.h>
 #include <dji_version.h>
 
 #include "dji_sdk_config.h"
@@ -59,7 +62,8 @@ constexpr uint32_t kTelemetryHeading = 1U << 5;
 constexpr uint32_t kTelemetryRtk = 1U << 6;
 constexpr uint32_t kTelemetryVelocity = 1U << 7;
 constexpr uint32_t kTelemetryGpsQuality = 1U << 8;
-constexpr std::size_t kMaxPilotBoxes = std::numeric_limits<uint8_t>::max();
+constexpr std::size_t kMaxPilotBoxes = 62;   // DJI Pilot overlay cap (proven safe)
+constexpr std::size_t kMaxInternalBoxes = 2048;  // internal AI pipeline limit
 constexpr std::size_t kMaxContours = 64;
 constexpr std::size_t kMaxContourPoints = 128;
 constexpr uint64_t kDefaultStaleResultTimeoutNs = 1'500'000'000ULL;
@@ -167,10 +171,74 @@ struct RenderResult {
 
 struct Controls {
     bool running = false;
-    bool plant = true;
-    bool segmenter = false;
     uint32_t snapshotSequence = 0;
+    bool gimbalDown = false;
+    bool gimbalReady = false;
 };
+
+static bool g_gimbalInitialized = false;
+static float g_gimbalPitch = 0.0f;
+static bool g_gimbalFeedbackValid = false;
+static uint64_t g_gimbalFeedbackTimestamp = 0;
+
+static bool InitGimbal()
+{
+    if (g_gimbalInitialized) return true;
+    T_DjiReturnCode code = DjiGimbalManager_Init();
+    if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+        USER_LOG_WARN("DjiGimbalManager_Init gagal, code=0x%08llX",
+                      static_cast<unsigned long long>(code));
+        return false;
+    }
+    code = DjiGimbalManager_SetMode(DJI_MOUNT_POSITION_PAYLOAD_PORT_NO1, DJI_GIMBAL_MODE_FREE);
+    if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+        USER_LOG_WARN("DjiGimbalManager_SetMode gagal, code=0x%08llX",
+                      static_cast<unsigned long long>(code));
+    }
+    g_gimbalInitialized = true;
+    USER_LOG_INFO("Gimbal manager initialized OK");
+    return true;
+}
+
+
+static void RotateGimbalDown()
+{
+    if (!InitGimbal()) return;
+    T_DjiReturnCode code = DjiGimbalManager_Reset(DJI_MOUNT_POSITION_PAYLOAD_PORT_NO1,
+                                                    DJI_GIMBAL_RESET_MODE_PITCH_DOWNWARD_UPWARD_AND_YAW);
+    USER_LOG_INFO("Gimbal NADIR (Reset Downward+Yaw), code=0x%08llX", static_cast<unsigned long long>(code));
+}
+
+static void ResetGimbalForward()
+{
+    if (!InitGimbal()) return;
+    T_DjiReturnCode code = DjiGimbalManager_Reset(DJI_MOUNT_POSITION_PAYLOAD_PORT_NO1,
+                                                    DJI_GIMBAL_RESET_MODE_PITCH_AND_YAW);
+    USER_LOG_INFO("Gimbal reset requested, code=0x%08llX",
+                  static_cast<unsigned long long>(code));
+}
+
+enum GimbalCommand { GIMBAL_CMD_NONE, GIMBAL_CMD_DOWN, GIMBAL_CMD_FORWARD };
+static GimbalCommand g_gimbalCommand = GIMBAL_CMD_NONE;
+static bool g_gimbalCommandPending = false;
+
+static void ProcessGimbalCommand()
+{
+    if (!g_gimbalCommandPending) return;
+    GimbalCommand cmd = g_gimbalCommand;
+    g_gimbalCommand = GIMBAL_CMD_NONE;
+    g_gimbalCommandPending = false;
+
+    switch (cmd) {
+        case GIMBAL_CMD_DOWN:
+            RotateGimbalDown();
+            break;
+        case GIMBAL_CMD_FORWARD:
+            ResetGimbalForward();
+            break;
+        default: break;
+    }
+}
 
 std::atomic<bool> g_stop{false};
 volatile std::sig_atomic_t g_signalStop = 0;
@@ -184,11 +252,12 @@ bool g_framePending = false;
 std::atomic<uint64_t> g_droppedFrames{0};
 std::atomic<bool> g_overlayMetadataAvailable{true};
 std::atomic<uint64_t> g_overlayMetadataErrorCode{0};
+std::atomic<int> g_pilotActualSentCount{0};
 std::mutex g_resultMutex;
 RenderResult g_renderResult;
 std::mutex g_controlMutex;
 Controls g_controls;
-std::array<int32_t, 6> g_widgetValues{{0, 0, 1, 0, 0, 0}};
+std::array<int32_t, 6> g_widgetValues{{0, 0, 0, 0}};
 std::atomic<int32_t> g_statusValue{0};
 std::string g_ipcDirectory;
 bool g_fcSubscriptionInitialized = false;
@@ -256,6 +325,43 @@ uint64_t EnvironmentMilliseconds(const char *name, uint64_t defaultValue)
 void SignalHandler(int)
 {
     g_signalStop = 1;
+}
+
+static std::string DeriveAppRoot()
+{
+    char exePath[4096] = {};
+    const ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    std::string exeDir;
+    if (len > 0) {
+        exePath[len] = 0;
+        exeDir = std::filesystem::path(exePath).parent_path().string();
+    } else {
+        exeDir = std::filesystem::current_path().string();
+    }
+    std::filesystem::path cur = std::filesystem::path(exeDir);
+    std::filesystem::path root;
+    for (int i = 0; i < 6; ++i) { if (std::filesystem::exists(cur / "payload")) { root = cur; break; } cur = cur.parent_path(); }
+    if (root.empty()) root = std::filesystem::path(exeDir).parent_path().parent_path();
+    return root.string();
+}
+
+static void InitializeDerivedPaths()
+{
+    const std::string appRoot = DeriveAppRoot();
+    const std::string payloadDir = appRoot + "/payload";
+
+    auto setIfEmpty = [](const char* name, const std::string& value) {
+        const char* existing = std::getenv(name);
+        if (existing == nullptr || existing[0] == 0) {
+            setenv(name, value.c_str(), 1);
+        }
+    };
+
+    setIfEmpty("GAP_PLOT_AI_APP_ROOT", appRoot);
+    setIfEmpty("GAP_PLOT_AI_RUNTIME_ROOT", appRoot + "/data/runtime");
+    setIfEmpty("GAP_PLOT_AI_IPC_DIR", "/dev/shm/ggp-drone-ai");
+    setIfEmpty("GAP_PLOT_AI_WIDGET_DIR", payloadDir + "/share/config/widget");
+    setIfEmpty("PYTHONPATH", payloadDir + "/python/lib/python3.8/site-packages");
 }
 
 void EnsureRuntimeDirectories()
@@ -440,8 +546,6 @@ bool WriteControls()
     }
     std::ostringstream value;
     value << "running=" << (controls.running ? 1 : 0) << '\n'
-          << "plant=" << (controls.plant ? 1 : 0) << '\n'
-          << "segmenter=" << (controls.segmenter ? 1 : 0) << '\n'
           << "snapshot_seq=" << controls.snapshotSequence << '\n';
     const std::string text = value.str();
     return AtomicWrite(IpcPath("control.txt"),
@@ -457,17 +561,31 @@ T_DjiReturnCode SetWidgetValue(E_DjiWidgetType, uint32_t index, int32_t value, v
         std::lock_guard<std::mutex> lock(g_controlMutex);
         switch (index) {
             case 0:
+                g_controls.gimbalDown = value != 0;
+                g_widgetValues[0] = value != 0;
+                USER_LOG_INFO("Gimbal switch: %s", g_controls.gimbalDown ? "ON (down)" : "OFF (forward)");
+                if (g_controls.gimbalDown && !g_gimbalCommandPending) {
+                    g_gimbalCommandPending = true;
+                    g_gimbalCommand = GIMBAL_CMD_DOWN;
+                } else if (!g_controls.gimbalDown && !g_gimbalCommandPending) {
+                    g_gimbalCommandPending = true;
+                    g_gimbalCommand = GIMBAL_CMD_FORWARD;
+                }
+                break;
+            case 1:
                 if (!g_controls.running) {
                     g_controls.running = true;
                     g_statusValue.store(1);
                     g_overlayMetadataAvailable.store(true);
                     g_overlayMetadataErrorCode.store(0);
+                    USER_LOG_INFO("Start AI requested");
                 }
                 break;
-            case 1:
+            case 2:
                 if (g_controls.running) {
                     g_controls.running = false;
                     g_statusValue.store(4);
+                    USER_LOG_INFO("Stop AI requested");
                 }
                 {
                     std::lock_guard<std::mutex> resultLock(g_resultMutex);
@@ -476,18 +594,7 @@ T_DjiReturnCode SetWidgetValue(E_DjiWidgetType, uint32_t index, int32_t value, v
                     g_renderResult.status = "STOPPING";
                 }
                 break;
-            case 2:
-                g_controls.plant = value != 0;
-                g_widgetValues[2] = value != 0;
-                break;
             case 3:
-                g_controls.segmenter = value != 0;
-                g_widgetValues[3] = value != 0;
-                break;
-            case 4:
-                ++g_controls.snapshotSequence;
-                break;
-            case 5:
                 break;
             default:
                 return DJI_ERROR_SYSTEM_MODULE_CODE_INVALID_PARAMETER;
@@ -521,24 +628,43 @@ void InitWidget()
         throw std::runtime_error("GAP_PLOT_AI_WIDGET_DIR belum terisi");
     }
     static const T_DjiWidgetHandlerListItem handlers[] = {
-        {0, DJI_WIDGET_TYPE_BUTTON, SetWidgetValue, GetWidgetValue, nullptr},
+        {0, DJI_WIDGET_TYPE_SWITCH, SetWidgetValue, GetWidgetValue, nullptr},
         {1, DJI_WIDGET_TYPE_BUTTON, SetWidgetValue, GetWidgetValue, nullptr},
-        {2, DJI_WIDGET_TYPE_SWITCH, SetWidgetValue, GetWidgetValue, nullptr},
-        {3, DJI_WIDGET_TYPE_SWITCH, SetWidgetValue, GetWidgetValue, nullptr},
-        {4, DJI_WIDGET_TYPE_BUTTON, SetWidgetValue, GetWidgetValue, nullptr},
-        {5, DJI_WIDGET_TYPE_LIST, SetWidgetValue, GetWidgetValue, nullptr},
+        {2, DJI_WIDGET_TYPE_BUTTON, SetWidgetValue, GetWidgetValue, nullptr},
     };
     T_DjiReturnCode code = DjiWidget_Init();
     if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
         throw std::runtime_error("DjiWidget_Init gagal");
     }
-    code = DjiWidget_RegDefaultUiConfigByDirPath(widgetDirectory);
+    std::string widgetBase(widgetDirectory);
+    std::string enPath = widgetBase + "/en_big_screen";
+    std::string cnPath = widgetBase + "/cn_big_screen";
+
+    USER_LOG_INFO("WIDGET_EN_PATH=%s", enPath.c_str());
+    USER_LOG_INFO("WIDGET_CN_PATH=%s", cnPath.c_str());
+
+    bool widgetOk = true;
+    code = DjiWidget_RegDefaultUiConfigByDirPath(enPath.c_str());
+    USER_LOG_INFO("Widget RegDefault result=0x%08llX", static_cast<unsigned long long>(code));
     if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-        throw std::runtime_error("Registrasi widget_config.json gagal");
+        USER_LOG_WARN("Widget not available (non-fatal), code=0x%08llX",
+                      static_cast<unsigned long long>(code));
+        widgetOk = false;
     }
-    code = DjiWidget_RegHandlerList(handlers, sizeof(handlers) / sizeof(handlers[0]));
-    if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
-        throw std::runtime_error("Registrasi widget handlers gagal");
+    if (widgetOk) {
+        code = DjiWidget_RegUiConfigByDirPath(DJI_MOBILE_APP_LANGUAGE_ENGLISH,
+                                              DJI_MOBILE_APP_SCREEN_TYPE_BIG_SCREEN, enPath.c_str());
+        USER_LOG_INFO("Widget RegEn result=0x%08llX", static_cast<unsigned long long>(code));
+
+        code = DjiWidget_RegUiConfigByDirPath(DJI_MOBILE_APP_LANGUAGE_CHINESE,
+                                              DJI_MOBILE_APP_SCREEN_TYPE_BIG_SCREEN, cnPath.c_str());
+        USER_LOG_INFO("Widget RegCn result=0x%08llX", static_cast<unsigned long long>(code));
+
+        code = DjiWidget_RegHandlerList(handlers, sizeof(handlers) / sizeof(handlers[0]));
+        if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+            USER_LOG_WARN("Widget handler reg failed (non-fatal), code=0x%08llX",
+                          static_cast<unsigned long long>(code));
+        }
     }
 }
 
@@ -573,10 +699,10 @@ void InitTelemetry()
     g_fcSubscriptionInitialized = true;
     SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_POSITION_FUSED,
                    DJI_DATA_SUBSCRIPTION_TOPIC_5_HZ);
-    SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_HEIGHT_RELATIVE,
-                   DJI_DATA_SUBSCRIPTION_TOPIC_5_HZ);
+    SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_HEIGHT_FUSION,
+                   DJI_DATA_SUBSCRIPTION_TOPIC_50_HZ);
     SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_GIMBAL_ANGLES,
-                   DJI_DATA_SUBSCRIPTION_TOPIC_5_HZ);
+                   DJI_DATA_SUBSCRIPTION_TOPIC_50_HZ);
     SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_QUATERNION,
                    DJI_DATA_SUBSCRIPTION_TOPIC_5_HZ);
     SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_VELOCITY,
@@ -585,6 +711,8 @@ void InitTelemetry()
                    DJI_DATA_SUBSCRIPTION_TOPIC_5_HZ);
     SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_RTK_POSITION_INFO,
                    DJI_DATA_SUBSCRIPTION_TOPIC_1_HZ);
+    SubscribeTopic(DJI_FC_SUBSCRIPTION_TOPIC_GIMBAL_ANGLES,
+                   DJI_DATA_SUBSCRIPTION_TOPIC_50_HZ);
 }
 
 FrameHeader BuildFrameHeader(const FramePacket &frame)
@@ -619,7 +747,7 @@ FrameHeader BuildFrameHeader(const FramePacket &frame)
             kTelemetryGpsQuality;
     }
     T_DjiFcSubscriptionHeightRelative relativeAltitude = 0;
-    if (ReadTopic(DJI_FC_SUBSCRIPTION_TOPIC_HEIGHT_RELATIVE, &relativeAltitude)) {
+    if (ReadTopic(DJI_FC_SUBSCRIPTION_TOPIC_HEIGHT_FUSION, &relativeAltitude)) {
         header.relativeAltitude = relativeAltitude;
         header.telemetryValidMask |= kTelemetryRelativeAltitude;
     }
@@ -730,7 +858,7 @@ void FrameSpoolThread()
                 USER_LOG_WARN("Encode AI rendered stream gagal, code=0x%08llX",
                               static_cast<unsigned long long>(encodeCode));
             }
-            std::free(metadata);
+            if (metadata != nullptr) { std::free(metadata); }
         }
     }
 }
@@ -756,7 +884,7 @@ bool ParseResultFile(RenderResult *parsed)
                 next.totalDetections >> next.overlayDetections >> next.gapCount >>
                 next.sourceWidth >> next.sourceHeight >> next.rowStride;
             sawHeader = !stream.fail();
-        } else if (type == "BOX" && next.boxes.size() < kMaxPilotBoxes) {
+        } else if (type == "BOX" && next.boxes.size() < kMaxInternalBoxes) {
             unsigned int classId = 0;
             NormalizedBox box;
             stream >> box.id >> classId >> box.confidence >> box.x1 >> box.y1 >> box.x2 >>
@@ -848,38 +976,65 @@ void DrawLine(std::vector<uint8_t> *rgb, int width, int height,
 
 T_DjiLiveViewStandardMetaData *BuildPilotMetadata(const RenderResult &result)
 {
-    const std::size_t boxCount = std::min(result.boxes.size(), kMaxPilotBoxes);
+    const std::size_t rawBoxCount = std::min(result.boxes.size(), kMaxPilotBoxes);
+    if (rawBoxCount == 0) {
+        return nullptr;
+    }
     const std::size_t allocation =
         sizeof(T_DjiLiveViewStandardMetaData) +
-        (boxCount > 0 ? boxCount - 1 : 0) * sizeof(T_DjiLiveViewBoundingBox);
+        (rawBoxCount > 0 ? rawBoxCount - 1 : 0) * sizeof(T_DjiLiveViewBoundingBox);
     auto *metadata = static_cast<T_DjiLiveViewStandardMetaData *>(std::calloc(1, allocation));
     if (metadata == nullptr) {
         return nullptr;
     }
-    metadata->boxCount = static_cast<uint8_t>(boxCount);
-    for (std::size_t index = 0; index < boxCount; ++index) {
+    std::size_t boxIndex = 0;
+    for (std::size_t index = 0; index < rawBoxCount; ++index) {
         const NormalizedBox &source = result.boxes[index];
-        T_DjiLiveViewBoundingBox &target = metadata->boxData[index];
+        const float width = source.x2 - source.x1;
+        const float height = source.y2 - source.y1;
+        const float cw = Clamp01(width);
+        const float ch = Clamp01(height);
+        if (cw <= 0.0f || ch <= 0.0f) {
+            continue;
+        }
+        const uint16_t cx = static_cast<uint16_t>(
+            std::lround(Clamp01(source.x1 + width / 2) * 10000));
+        const uint16_t cy = static_cast<uint16_t>(
+            std::lround(Clamp01(source.y1 + height / 2) * 10000));
+        const uint16_t w = static_cast<uint16_t>(std::lround(cw * 10000));
+        const uint16_t h = static_cast<uint16_t>(std::lround(ch * 10000));
+        if (w == 0 || h == 0 || cx > 10000 || cy > 10000) {
+            continue;
+        }
+        T_DjiLiveViewBoundingBox &target = metadata->boxData[boxIndex];
         target.id = source.id;
         target.type = source.classId;
         target.state = DJI_LIVEVIEW_OBJ_STATE_TRACKED;
-        const float width = source.x2 - source.x1;
-        const float height = source.y2 - source.y1;
-        target.box.cx = static_cast<uint16_t>(
-            std::lround(Clamp01(source.x1 + width / 2) * 10000));
-        target.box.cy = static_cast<uint16_t>(
-            std::lround(Clamp01(source.y1 + height / 2) * 10000));
-        target.box.w =
-            static_cast<uint16_t>(std::lround(Clamp01(width) * 10000));
-        target.box.h =
-            static_cast<uint16_t>(std::lround(Clamp01(height) * 10000));
+        target.box.cx = cx;
+        target.box.cy = cy;
+        target.box.w = w;
+        target.box.h = h;
         target.box.distance = 0;
+        ++boxIndex;
     }
+    if (boxIndex == 0) {
+        std::free(metadata);
+        return nullptr;
+    }
+    metadata->boxCount = static_cast<uint8_t>(boxIndex);
     return metadata;
 }
-
 bool SendPilotMetadata(RenderResult result)
 {
+    // Sort by confidence descending, keep top kMaxPilotBoxes (v16)
+    std::sort(result.boxes.begin(), result.boxes.end(),
+              [](const NormalizedBox &a, const NormalizedBox &b) {
+                  return a.confidence > b.confidence;
+              });
+    if (result.boxes.size() > kMaxPilotBoxes) {
+        result.boxes.resize(kMaxPilotBoxes);
+    }
+
     const uint64_t now = MonotonicNs();
     if (!g_staticOverlayDebug &&
         (result.generatedMonotonicNs == 0 ||
@@ -889,18 +1044,21 @@ bool SendPilotMetadata(RenderResult result)
     }
     T_DjiLiveViewStandardMetaData *metadata = BuildPilotMetadata(result);
     if (metadata == nullptr) {
-        USER_LOG_ERROR("Alokasi AI metadata gagal.");
+        g_pilotActualSentCount.store(0);
         return false;
     }
+    const int sentCount = static_cast<int>(metadata->boxCount);
     const T_DjiReturnCode code = DjiLiveview_SendAiMetaToPilot(metadata);
     std::free(metadata);
     if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+        g_pilotActualSentCount.store(0);
         g_overlayMetadataAvailable.store(false);
         g_overlayMetadataErrorCode.store(static_cast<uint64_t>(code));
-        USER_LOG_ERROR("PSDK AI metadata overlay unavailable, code=0x%08llX",
+        USER_LOG_WARN("Pilot overlay degraded (non-fatal), code=0x%08llX",
                        static_cast<unsigned long long>(code));
         return false;
     }
+    g_pilotActualSentCount.store(sentCount);
     g_overlayMetadataAvailable.store(true);
     g_overlayMetadataErrorCode.store(0);
     return true;
@@ -1032,8 +1190,8 @@ void StartLiveview()
         throw std::runtime_error("DjiLiveview_Init gagal");
     }
     g_liveviewInitialized = true;
-    static const char *labels[] = {"plant"};
-    code = DjiLiveview_RegUserAiTargetLableList(1, labels);
+    static const char *labels[] = {"plant", "gap"};
+    code = DjiLiveview_RegUserAiTargetLableList(2, labels);
     if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
         throw std::runtime_error("Register AI label gagal");
     }
@@ -1154,14 +1312,15 @@ void UpdatePilotStatus(const RenderResult &result)
                       result.lastError.empty() ? "worker/stream error; check errors.log"
                                                : result.lastError.c_str());
     } else {
+        const int pilotSent = g_pilotActualSentCount.load();
         std::snprintf(message, sizeof(message),
                       "Gap Plot AI DEV: %s\r\nAI %.1f FPS | %.0f ms | p50 %.0f\r\n"
-                      "plants %u | Pilot %u | gap %s\r\n"
+                      "plants %u | Pilot %d/%u | gap %s\r\n"
                       "RTK %d GPS %d | model %d ctx %d warm %d\r\n"
                       "%ux%u %.1f FPS | drop %llu | log %s",
                       result.status.c_str(), result.fps, result.latencyMs,
                       result.p50LatencyMs, result.totalDetections,
-                      result.overlayDetections, gapText,
+                      pilotSent, result.totalDetections, gapText,
                       result.rtkStatus, result.gpsSignalLevel,
                       result.modelLoadCount, result.backendInitializationCount,
                       result.warmupCount,
@@ -1264,8 +1423,27 @@ void ValidateAircraft()
 
 }  // namespace
 
+
+#include <sys/wait.h>
+static pid_t g_workerPid = 0;
+static void SpawnPythonWorker() {
+    const char *r = std::getenv("GAP_PLOT_AI_APP_ROOT");
+    if (!r || !r[0]) return;
+    std::string p = std::string(r)+"/payload/python/bin/python3";
+    if (access(p.c_str(),X_OK)!=0) p="/usr/bin/python3.8";
+    std::string cfg = std::string(r)+"/payload/share/config/live.yaml";
+    const char *ipc = std::getenv("GAP_PLOT_AI_IPC_DIR");
+    pid_t pid = fork();
+    if (pid==0) { setenv("PYTHONPATH",(std::string(r)+"/payload/python/lib/python3.8/site-packages").c_str(),1);
+        execl(p.c_str(),"python3","-m","gap_plot_ai.worker","--config",cfg.c_str(),"--ipc-dir",ipc,"--backend","engine",nullptr); _exit(1); }
+    if (pid>0) { g_workerPid=pid; USER_LOG_INFO("Worker spawned PID=%d",pid); }
+}
+static void StopPythonWorker() { if (g_workerPid>0) { kill(g_workerPid,SIGTERM); int s; waitpid(g_workerPid,&s,0); g_workerPid=0; } }
+
 int main()
 {
+    InitializeDerivedPaths();
+    SpawnPythonWorker();
     std::signal(SIGINT, SignalHandler);
     std::signal(SIGTERM, SignalHandler);
     const char *ipc = std::getenv("GAP_PLOT_AI_IPC_DIR");
@@ -1303,15 +1481,20 @@ int main()
         }
         coreInitialized = true;
         ValidateAircraft();
-        code = DjiCore_SetAlias("Gap Plot AI DEV");
+        code = DjiCore_SetAlias("drone-ai");
         if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
             throw std::runtime_error("DjiCore_SetAlias gagal");
+        }
+        code = DjiCore_SetSerialNumber("GGP-M3-DEV-001");
+        if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
+            USER_LOG_WARN("DjiCore_SetSerialNumber gagal, code=0x%08llX",
+                          static_cast<unsigned long long>(code));
         }
         T_DjiFirmwareVersion version = {};
         version.majorVersion = 0;
         version.minorVersion = 1;
         version.modifyVersion = 0;
-        version.debugVersion = 0;
+        version.debugVersion = 25;
         code = DjiCore_SetFirmwareVersion(version);
         if (code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS) {
             throw std::runtime_error("DjiCore_SetFirmwareVersion gagal");
@@ -1331,7 +1514,7 @@ int main()
             std::lock_guard<std::mutex> lock(g_resultMutex);
             g_renderResult = StaticOverlayResult();
         }
-        USER_LOG_INFO("gap_plot_ai DEV ready, M4E visual stream requested; "
+        USER_LOG_INFO("drone-ai ready, M4E visual stream requested; "
                       "rendered_stream=%d static_overlay=%d.",
                       g_renderedStreamEnabled, g_staticOverlayDebug);
 
@@ -1339,6 +1522,7 @@ int main()
         uint64_t lastStatusUpdate = 0;
         bool pilotOverlayCleared = true;
         while (!g_stop.load() && g_signalStop == 0) {
+            ProcessGimbalCommand();
             RenderResult parsed;
             if (ParseResultFile(&parsed) && parsed.frameIndex != lastParsedFrame) {
                 lastParsedFrame = parsed.frameIndex;
@@ -1351,9 +1535,9 @@ int main()
                     std::lock_guard<std::mutex> lock(g_controlMutex);
                     controls = g_controls;
                 }
-                if (controls.running && controls.plant) {
+                if (controls.running) {
                     if (!SendPilotMetadata(parsed)) {
-                        g_statusValue.store(5);
+                        ;
                     } else {
                         pilotOverlayCleared = parsed.boxes.empty();
                     }
@@ -1401,14 +1585,14 @@ int main()
                     g_statusValue.store(5);
                 } else if (controls.running &&
                            !g_overlayMetadataAvailable.load()) {
-                    current.status = "ERROR";
+                    current.status = "WARNING";
                     std::ostringstream error;
-                    error << "OVERLAY_UNAVAILABLE: DjiLiveview_SendAiMetaToPilot code=0x"
-                          << std::hex << g_overlayMetadataErrorCode.load();
+                    error << "Overlay degraded: code=0x"
+                          << std::hex << g_overlayMetadataErrorCode.load()
+                          << " (AI pipeline unaffected)";
                     current.lastError = error.str();
                     current.boxes.clear();
                     current.contours.clear();
-                    g_statusValue.store(5);
                 } else if (!controls.running && current.status != "ERROR") {
                     current.status = "IDLE";
                     current.totalDetections = 0;
@@ -1435,13 +1619,14 @@ int main()
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     } catch (const std::exception &error) {
-        std::cerr << "gap_plot_ai error: " << error.what() << '\n';
+        std::cerr << "drone-ai error: " << error.what() << '\n';
         g_statusValue.store(5);
         g_stop.store(true);
     }
 
     g_stop.store(true);
     g_frameCondition.notify_all();
+    StopPythonWorker();
     if (spoolThread.joinable()) {
         spoolThread.join();
     }

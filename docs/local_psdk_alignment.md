@@ -1,3 +1,5 @@
+> Catatan handover: dokumen ini adalah dokumen historis sebelum konsolidasi v27. Untuk status canonical terbaru gunakan `README.md`, `HANDOVER.md`, dan dokumen handover utama di `docs/README.md`. Jangan menganggap versi/build/deploy di dokumen ini sebagai status final saat ini.
+
 # Audit lokal PSDK 3.16.0 — macOS arm64
 
 ## Baseline resmi

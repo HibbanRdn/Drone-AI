@@ -1,3 +1,5 @@
+> Catatan handover: dokumen ini adalah dokumen historis sebelum konsolidasi v27. Untuk status canonical terbaru gunakan `README.md`, `HANDOVER.md`, dan dokumen handover utama di `docs/README.md`. Jangan menganggap versi/build/deploy di dokumen ini sebagai status final saat ini.
+
 # Readiness build, package, dan upload Manifold 3
 
 Status 3 Agustus 2026: **source/package flow siap diverifikasi, tetapi belum

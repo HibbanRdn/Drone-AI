@@ -1,3 +1,3 @@
-"""Gap Plot AI onboard inference components."""
+"""Gap Plot detection package."""
 
 __version__ = "0.1.0"

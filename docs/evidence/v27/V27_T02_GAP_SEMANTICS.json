@@ -1,0 +1,23 @@
+{
+  "test": "V27-T02-gap-semantics-and-orientation",
+  "cases": [
+    {
+      "name": "complete_grid_zero_gaps",
+      "pass": true
+    },
+    {
+      "name": "multi_orientation_gap_position_err_lt_2px",
+      "pass": true
+    },
+    {
+      "name": "insufficient_not_evaluated_null",
+      "pass": true
+    },
+    {
+      "name": "low_coverage_row_excluded",
+      "pass": true
+    }
+  ],
+  "worst_gap_position_err_px": 0.3989121471379706,
+  "result": "PASS"
+}

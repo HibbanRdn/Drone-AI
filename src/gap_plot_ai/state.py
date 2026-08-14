@@ -14,6 +14,7 @@ class AppState(str, Enum):
     RUNNING = "RUNNING"
     STOPPING = "STOPPING"
     ERROR = "ERROR"
+    FINALIZING = "FINALIZING"
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,8 @@ _ALLOWED: Dict[AppState, Set[AppState]] = {
     AppState.STARTING: {AppState.WARMING_UP, AppState.RUNNING, AppState.STOPPING, AppState.ERROR},
     AppState.WARMING_UP: {AppState.RUNNING, AppState.STOPPING, AppState.ERROR},
     AppState.RUNNING: {AppState.STOPPING, AppState.ERROR},
-    AppState.STOPPING: {AppState.IDLE, AppState.ERROR},
+    AppState.STOPPING: {AppState.FINALIZING, AppState.IDLE, AppState.ERROR},
+    AppState.FINALIZING: {AppState.IDLE, AppState.ERROR},
     AppState.ERROR: {AppState.IDLE, AppState.STARTING, AppState.STOPPING},
 }
 
@@ -68,8 +70,9 @@ class StateMachine:
                 )
             self._state = target
             self._changed_at = datetime.now(timezone.utc).isoformat()
-            if target == AppState.RUNNING:
-                self._last_error = None
+            if target == AppState.RUNNING or target == AppState.IDLE:
+                if self._last_error and self._last_error.recoverable:
+                    self._last_error = None
             snapshot = self._snapshot_unlocked()
         if self._callback is not None:
             self._callback(snapshot)

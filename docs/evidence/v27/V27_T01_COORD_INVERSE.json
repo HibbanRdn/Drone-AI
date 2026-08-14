@@ -1,0 +1,23 @@
+{
+  "test": "V27-T01-coordinate-inverse",
+  "source": "/home/dji/drone_ai_dev/vnext-v27/source/src",
+  "orientations": [
+    0.0,
+    30.0,
+    60.0,
+    90.0,
+    135.0,
+    179.0
+  ],
+  "worst_roundtrip_err_px": 1.6077746776921858e-13,
+  "worst_at": [
+    60.0,
+    801.5351884760807,
+    569.6639483454852
+  ],
+  "blocker_repro": {
+    "fixed_err_px": 1.4210854715202004e-14,
+    "buggy_err_px": 167.37999999999997
+  },
+  "result": "PASS"
+}

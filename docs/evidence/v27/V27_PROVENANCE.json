@@ -1,0 +1,10 @@
+{
+  "base_source": "/home/dji/drone_ai_dev/vnext-v26/source",
+  "v26_base_source_sha256": "5fae7a659e1e2dcd3b484912eb8862b72a09ed5515217a9931329ff38829ef45",
+  "v26_base_source_files": 38,
+  "v27_initial_source_sha256": "5fae7a659e1e2dcd3b484912eb8862b72a09ed5515217a9931329ff38829ef45",
+  "v27_initial_source_files": 38,
+  "snapshot_dir": "/home/dji/drone_ai_dev/forensics/v26_pre_v27_20260812_113718",
+  "created_utc": "2026-08-12T11:37:18.855759+00:00",
+  "no_installed_changes": true
+}

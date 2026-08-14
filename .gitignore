@@ -6,6 +6,10 @@ config/secrets.env
 config/*.secret.*
 config/dji_sdk_app_info.local.h
 
+# Local Mac USB/RNDIS helper experiments; not canonical Drone AI source.
+dji_proxy.py
+dji_rndis.py
+
 # Python environments and caches
 .venv/
 .venv_*/

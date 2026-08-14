@@ -1,3 +1,5 @@
+> Catatan handover: dokumen ini adalah dokumen historis sebelum konsolidasi v27. Untuk status canonical terbaru gunakan `README.md`, `HANDOVER.md`, dan dokumen handover utama di `docs/README.md`. Jangan menganggap versi/build/deploy di dokumen ini sebagai status final saat ini.
+
 # Ground test checklist
 
 Jangan jalankan motor atau flight. Propeller tidak diperlukan untuk test ini.

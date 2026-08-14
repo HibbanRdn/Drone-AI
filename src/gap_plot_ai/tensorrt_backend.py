@@ -277,13 +277,13 @@ def _opencv_nms(
             ]
             for index in indexes
         ]
+        # Do not use max_detections as OpenCV top_k here.
+        # All confidence-qualified candidates must enter NMS.
         selected = cv2.dnn.NMSBoxes(
             boxes_xywh,
             [float(scores[index]) for index in indexes],
             0.0,
             float(iou_threshold),
-            1.0,
-            int(max_detections),
         )
         if selected is None:
             continue
@@ -587,3 +587,361 @@ class DirectTensorRTModel:
         self.runtime = None
         if errors:
             raise RuntimeError("TensorRT shutdown reported {} CUDA errors".format(len(errors)))
+
+
+
+class DirectTensorRTSegmenterModel:
+    """TensorRT 8.5 segmenter with mask prototype decoding (NumPy only)."""
+
+    def __init__(
+        self,
+        model_config: Dict[str, Any],
+        *,
+        backend: str,
+        device: Union[str, int],
+    ) -> None:
+        if backend != "engine":
+            raise ValueError("DirectTensorRTSegmenterModel only accepts backend=engine")
+        if str(model_config.get("task")) != "segment":
+            raise ValueError(
+                "DirectTensorRTSegmenterModel expects task=segment, got {}".format(
+                    model_config.get("task")
+                )
+            )
+        self.config = model_config
+        self.path = _resolve_engine_path(model_config)
+        if not self.path.is_file():
+            raise FileNotFoundError("TensorRT engine not found: {}".format(self.path))
+        self.backend = "engine"
+        self.device = device
+        if str(device) not in {"0", "cuda:0"}:
+            raise ValueError("Direct TensorRT runtime is pinned to cuda:0")
+        self.expected_task = "segment"
+        self.names = {
+            int(key): str(value)
+            for key, value in model_config.get("class_names", {}).items()
+        }
+
+        import tensorrt as trt
+
+        self.trt = trt
+        self.sha256 = _sha256_read_only(self.path)
+        self.engine_size_bytes = self.path.stat().st_size
+        self.logger = trt.Logger(trt.Logger.WARNING)
+        trt.init_libnvinfer_plugins(self.logger, "")
+        self.runtime = trt.Runtime(self.logger)
+        with self.path.open("rb") as source:
+            serialized = source.read()
+        self.engine = self.runtime.deserialize_cuda_engine(serialized)
+        if self.engine is None:
+            raise RuntimeError("TensorRT 8.5.2 could not deserialize the engine")
+        self.context = self.engine.create_execution_context()
+        if self.context is None:
+            raise RuntimeError("TensorRT execution context creation failed")
+
+        raw_metadata = []
+        for index in range(self.engine.num_bindings):
+            raw_metadata.append(
+                {
+                    "index": index,
+                    "name": self.engine.get_binding_name(index),
+                    "is_input": self.engine.binding_is_input(index),
+                    "dtype": str(self.engine.get_binding_dtype(index)),
+                    "shape": tuple(self.engine.get_binding_shape(index)),
+                }
+            )
+        self.bindings = normalize_binding_metadata(raw_metadata)
+        if any(item.dynamic for item in self.bindings):
+            raise ValueError("Segmenter engine has unresolved dynamic shape")
+
+        self.cuda = CudaRuntime(device_index=0)
+        self.stream = self.cuda.stream_create()
+        self.buffers: Dict[int, BindingBuffer] = {}
+        self.binding_addresses = [0] * len(self.bindings)
+        try:
+            for item in self.bindings:
+                dtype = np.dtype(trt.nptype(self.engine.get_binding_dtype(item.index)))
+                buffer = BindingBuffer(self.cuda, item, dtype)
+                self.buffers[item.index] = buffer
+                self.binding_addresses[item.index] = buffer.address
+        except Exception:
+            for buffer in self.buffers.values():
+                buffer.close()
+            self.cuda.stream_destroy(self.stream)
+            raise
+        self.input_binding = next(item for item in self.bindings if item.is_input)
+        self.output_bindings = [item for item in self.bindings if not item.is_input]
+        if len(self.output_bindings) != 2:
+            raise ValueError(
+                "Segmenter engine must expose exactly 2 outputs (detection + prototypes), got {}".format(
+                    len(self.output_bindings)
+                )
+            )
+        self._backend_initialization_count = 1
+        self._closed = False
+
+        self._image_size = int(self.config["image_size"])
+        self._conf_threshold = float(self.config["confidence_threshold"])
+        self._nms_iou = float(self.config["nms_iou_threshold"])
+        self._max_detections = int(self.config["max_detections"])
+        self._morph_open = int(self.config.get("morphology_open_kernel", 0))
+        self._morph_close = int(self.config.get("morphology_close_kernel", 0))
+        self._contour_min_area = float(self.config.get("contour_min_area_px", 256))
+        self._contour_epsilon = float(self.config.get("contour_epsilon_ratio", 0.002))
+        self._contour_max_points = int(self.config.get("contour_max_points", 96))
+
+    def audit(self) -> Dict[str, Any]:
+        return {
+            "path": str(self.path),
+            "backend": "direct_tensorrt_segmenter",
+            "task": self.expected_task,
+            "class_names": self.names,
+            "sha256": self.sha256,
+            "engine_size_bytes": self.engine_size_bytes,
+            "tensorrt_version": str(self.trt.__version__),
+            "bindings": [
+                {
+                    "index": item.index,
+                    "name": item.name,
+                    "is_input": item.is_input,
+                    "dtype": item.dtype,
+                    "shape": list(item.shape),
+                }
+                for item in self.bindings
+            ],
+            "pinned_host_memory": True,
+            "buffers_reused": True,
+            "backend_initialization_count": self._backend_initialization_count,
+            "image_size": self._image_size,
+            "confidence_threshold": self._conf_threshold,
+            "nms_iou_threshold": self._nms_iou,
+            "morphology_open_kernel": self._morph_open,
+            "morphology_close_kernel": self._morph_close,
+        }
+
+    def warmup(self) -> ModelOutput:
+        shape = self.input_binding.shape
+        height, width = self._input_height_width(shape)
+        output = self.predict(np.zeros((height, width, 3), dtype=np.uint8))
+        if output.warning:
+            raise RuntimeError(
+                "TensorRT segmenter warm-up failed: {}".format(output.warning)
+            )
+        return output
+
+    @staticmethod
+    def _input_height_width(shape: Sequence[int]) -> Tuple[int, int]:
+        if len(shape) != 4 or shape[0] != 1:
+            raise ValueError("TensorRT input must be batch-1 rank-4")
+        if shape[1] == 3:
+            return int(shape[2]), int(shape[3])
+        if shape[3] == 3:
+            return int(shape[1]), int(shape[2])
+        raise ValueError("TensorRT input must have exactly three color channels")
+
+    @staticmethod
+    def _sigmoid(x: np.ndarray) -> np.ndarray:
+        return 1.0 / (1.0 + np.exp(-np.clip(x, -88.0, 88.0)))
+
+    def _decode_segmenter(
+        self,
+        det_output: np.ndarray,
+        proto_output: np.ndarray,
+        meta: Any,
+    ) -> Tuple[np.ndarray, List[List[List[float]]]]:
+        """Decode YOLOv8-seg raw outputs into plantable-area mask + contours."""
+        height, width = self._input_height_width(self.input_binding.shape)
+
+        # output0: (1, 37, 33600) -> (33600, 37)
+        det = np.asarray(det_output)
+        if det.ndim == 3 and det.shape[0] == 1:
+            det = det[0]
+        num_features = 4 + 1 + 32  # bbox + class + mask_coeffs
+        if det.shape[0] == num_features:
+            det = det.T
+        elif det.shape[1] != num_features:
+            raise ValueError(
+                "Segmenter detection output has {} features, expected {}".format(
+                    det.shape[1] if det.ndim == 2 else det.shape, num_features
+                )
+            )
+
+        boxes_xywh = det[:, :4].astype(np.float32, copy=False)  # (N, 4)
+        class_scores = det[:, 4:5].astype(np.float32, copy=False)  # (N, 1)
+        mask_coeffs = det[:, 5:37].astype(np.float32, copy=False)  # (N, 32)
+
+        scores = class_scores[:, 0]
+        conf_mask = (
+            np.isfinite(scores)
+            & (scores >= self._conf_threshold)
+        )
+        boxes_xywh = boxes_xywh[conf_mask]
+        mask_coeffs = mask_coeffs[conf_mask]
+        scores = scores[conf_mask]
+        classes = np.zeros(len(scores), dtype=np.int32)  # single class
+
+        if boxes_xywh.size == 0:
+            return np.zeros((height, width), dtype=np.uint8), []
+
+        # xywh -> xyxy
+        boxes_xyxy = np.empty_like(boxes_xywh)
+        boxes_xyxy[:, 0] = boxes_xywh[:, 0] - boxes_xywh[:, 2] / 2.0
+        boxes_xyxy[:, 1] = boxes_xywh[:, 1] - boxes_xywh[:, 3] / 2.0
+        boxes_xyxy[:, 2] = boxes_xywh[:, 0] + boxes_xywh[:, 2] / 2.0
+        boxes_xyxy[:, 3] = boxes_xywh[:, 1] + boxes_xywh[:, 3] / 2.0
+
+        keep = _opencv_nms(
+            boxes_xyxy, scores, classes,
+            self._nms_iou, self._max_detections,
+        )
+
+        if keep.size == 0:
+            return np.zeros((height, width), dtype=np.uint8), []
+
+        boxes_xyxy = boxes_xyxy[keep]
+        mask_coeffs = mask_coeffs[keep]
+
+        # Mask prototypes: (32, 320, 320)
+        protos = np.asarray(proto_output, dtype=np.float32)
+        if protos.ndim == 4 and protos.shape[0] == 1:
+            protos = protos[0]
+        num_protos, proto_h, proto_w = protos.shape
+
+        # Decode each mask: coeffs @ protos -> sigmoid -> threshold
+        protos_flat = protos.reshape(num_protos, -1)  # (32, proto_h * proto_w)
+        masks_raw = mask_coeffs @ protos_flat  # (M, proto_h * proto_w)
+        masks_sig = self._sigmoid(masks_raw.reshape(-1, proto_h, proto_w))  # (M, proto_h, proto_w)
+
+        # Union all instance masks
+        combined = np.max(masks_sig, axis=0)  # (proto_h, proto_w)
+        combined = np.nan_to_num(combined, nan=0.0, posinf=0.0, neginf=0.0)
+        binary = (combined >= 0.5).astype(np.uint8)
+
+        # Resize prototype mask to model input size (letterbox space)
+        binary_input_size = cv2.resize(
+            binary, (width, height), interpolation=cv2.INTER_LINEAR
+        )
+        binary_input_size = (binary_input_size >= 0.5).astype(np.uint8)
+
+        # Reverse letterbox: crop padding, scale back to original image
+        source_h = meta.source_height
+        source_w = meta.source_width
+        pad_top = meta.pad_top
+        pad_left = meta.pad_left
+        scale = meta.scale
+
+        # Crop the valid (non-padded) region from letterbox
+        resized_h = int(round(source_h * scale))
+        resized_w = int(round(source_w * scale))
+        cropped = binary_input_size[pad_top:pad_top + resized_h, pad_left:pad_left + resized_w]
+
+        # Resize to original frame size
+        mask = cv2.resize(cropped, (source_w, source_h), interpolation=cv2.INTER_LINEAR)
+        mask = (mask >= 0.5).astype(np.uint8)
+
+        # Morphology
+        if self._morph_open > 1:
+            kernel = np.ones((self._morph_open, self._morph_open), dtype=np.uint8)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        if self._morph_close > 1:
+            kernel = np.ones((self._morph_close, self._morph_close), dtype=np.uint8)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+        # Contours
+        from .geometry import mask_to_contours
+        contours = mask_to_contours(
+            mask,
+            min_area_px=self._contour_min_area,
+            epsilon_ratio=self._contour_epsilon,
+            max_points=self._contour_max_points,
+        )
+
+        return mask, contours
+
+    def predict(self, image_bgr: np.ndarray) -> ModelOutput:
+        if self._closed:
+            return ModelOutput(warning="TensorRT segmenter backend is closed")
+        started = time.perf_counter()
+        try:
+            input_height, input_width = self._input_height_width(self.input_binding.shape)
+            preprocessing_started = time.perf_counter()
+            tensor, meta = preprocess_rgb_chw(
+                image_bgr, (input_height, input_width)
+            )
+            if self.input_binding.shape[-1] == 3:
+                tensor = tensor.transpose(0, 2, 3, 1)
+            input_buffer = self.buffers[self.input_binding.index]
+            np.copyto(input_buffer.host, tensor.astype(input_buffer.dtype, copy=False))
+            preprocessing_ms = (time.perf_counter() - preprocessing_started) * 1000
+
+            inference_started = time.perf_counter()
+            self.cuda.memcpy_async(
+                input_buffer.device_pointer,
+                input_buffer.host_pointer,
+                input_buffer.nbytes,
+                CUDA_MEMCPY_HOST_TO_DEVICE,
+                self.stream,
+            )
+            success = self.context.execute_async_v2(
+                bindings=self.binding_addresses,
+                stream_handle=int(self.stream.value),
+            )
+            if not success:
+                raise RuntimeError("TensorRT execute_async_v2 returned false")
+            for binding in self.output_bindings:
+                buffer = self.buffers[binding.index]
+                self.cuda.memcpy_async(
+                    buffer.host_pointer,
+                    buffer.device_pointer,
+                    buffer.nbytes,
+                    CUDA_MEMCPY_DEVICE_TO_HOST,
+                    self.stream,
+                )
+            self.cuda.stream_synchronize(self.stream)
+            inference_ms = (time.perf_counter() - inference_started) * 1000
+
+            post_started = time.perf_counter()
+            det_output = self.buffers[self.output_bindings[0].index].host
+            proto_output = self.buffers[self.output_bindings[1].index].host
+            mask, contours = self._decode_segmenter(
+                det_output, proto_output, meta
+            )
+            postprocessing_ms = (time.perf_counter() - post_started) * 1000
+
+            return ModelOutput(
+                mask=mask,
+                contours=contours,
+                latency_ms=(time.perf_counter() - started) * 1000,
+                preprocessing_ms=preprocessing_ms,
+                inference_ms=inference_ms,
+                postprocessing_ms=postprocessing_ms,
+            )
+        except Exception as error:
+            return ModelOutput(
+                latency_ms=(time.perf_counter() - started) * 1000,
+                warning="{}: {}".format(type(error).__name__, error),
+            )
+
+    def shutdown(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        errors = []
+        for buffer in self.buffers.values():
+            try:
+                buffer.close()
+            except Exception as error:
+                errors.append(error)
+        try:
+            self.cuda.stream_destroy(self.stream)
+        except Exception as error:
+            errors.append(error)
+        self.context = None
+        self.engine = None
+        self.runtime = None
+        if errors:
+            raise RuntimeError(
+                "TensorRT segmenter shutdown reported {} CUDA errors".format(
+                    len(errors)
+                )
+            )

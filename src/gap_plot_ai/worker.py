@@ -18,6 +18,7 @@ from .overlay import CoordinateMapper
 from .runtime import InferenceRuntime
 from .schema import Telemetry, json_safe
 from .sources import FrameEnvelope, FrameMetadata
+from .registration_writer import RegistrationFrameWriter
 from .state import AppState
 
 MAGIC = b"GPAIFRM2"
@@ -41,7 +42,7 @@ def _atomic_text(path: Path, value: str) -> None:
 
 
 def _read_control(path: Path) -> Dict[str, int]:
-    control = {"running": 0, "plant": 1, "segmenter": 0, "snapshot_seq": 0}
+    control = {"running": 0, "snapshot_seq": 0}
     if not path.is_file():
         return control
     try:
@@ -171,7 +172,7 @@ def read_frame(path: Path) -> FrameEnvelope:
 
 
 def serialize_result(result: Any, capture_monotonic_ns: int, status: str) -> str:
-    fps = float(result.metrics.get("ai_fps", 0))
+    fps_raw = result.metrics.get("ai_fps"); fps = float(fps_raw) if fps_raw is not None and 0 < float(fps_raw) < 10000 else 0.0
     p50 = float(result.metrics.get("p50_latency_ms", result.inference_latency_ms))
     overlay = result.overlay or {}
     selected = (
@@ -289,26 +290,36 @@ def run(args: argparse.Namespace) -> Optional[Path]:
     target_fps = float(config.get("live", {}).get("target_inference_fps", 1.5))
     min_inference_interval = 1.0 / target_fps
     last_inference_started = float("-inf")
+    frame_writer = None
     try:
         while not should_stop:
             control = _read_control(control_path)
             running_control = bool(control["running"])
             if running_control and not last_running_control:
-                runtime.plant_enabled = bool(control["plant"]) and bool(
-                    config["models"]["detector"]["enabled"]
-                )
-                runtime.segmenter_enabled = bool(control["segmenter"]) and bool(
-                    config["models"]["segmenter"]["enabled"]
-                )
+                runtime.plant_enabled = bool(config["models"]["detector"]["enabled"])
+                runtime.segmenter_enabled = bool(config["models"]["segmenter"]["enabled"])
                 try:
                     runtime.start()
                     last_frame_arrival = time.monotonic()
+                    if runtime.writer is not None:
+                        frame_writer = RegistrationFrameWriter(
+                            runtime.writer.session_dir,
+                            keyframe_interval_ms=float(config.get("live", {}).get("registration_keyframe_ms", 500)),
+                        )
+                    last_frame_index = -1
+                    last_inference_started = float("-inf")
+                    frame_writer = None
+                    session_start_ns = time.monotonic_ns()
                 except Exception as exc:
                     latest_status["warning"] = f"{type(exc).__name__}: {exc}"
             elif not running_control and last_running_control:
-                runtime.stop()
+                if frame_writer is not None:
+                    frame_writer.close(timeout_seconds=8)
+                    frame_writer = None
+                runtime.stop()  # v22: finalizer now runs inside stop()
                 result_path.unlink(missing_ok=True)
                 latest_status.clear()
+                # v17: session reset complete
             last_running_control = running_control
 
             now = time.monotonic()
@@ -336,6 +347,9 @@ def run(args: argparse.Namespace) -> Optional[Path]:
                 time.sleep(poll_seconds)
                 continue
             metadata = envelope.metadata
+            if metadata.capture_monotonic_ns < session_start_ns:
+                time.sleep(poll_seconds)
+                continue
             if metadata.sequence == last_frame_index:
                 if now - last_frame_arrival > stream_timeout:
                     runtime.fail(
@@ -354,6 +368,18 @@ def run(args: argparse.Namespace) -> Optional[Path]:
             snapshot = snapshot_seq != last_snapshot_seq
             last_snapshot_seq = snapshot_seq
             last_inference_started = time.monotonic()
+            if frame_writer is not None:
+                try:
+                    frame_writer.submit(
+                        envelope.frame_bgr,
+                        frame_id=int(metadata.sequence),
+                        capture_monotonic_ns=int(metadata.capture_monotonic_ns),
+                        width=int(metadata.width),
+                        height=int(metadata.height),
+                        is_inference_frame=True,
+                    )
+                except Exception:
+                    pass
             try:
                 result, _overlay = runtime.infer_frame(
                     envelope.frame_bgr,

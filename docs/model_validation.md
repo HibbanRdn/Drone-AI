@@ -1,3 +1,5 @@
+> Catatan handover: dokumen ini adalah dokumen historis sebelum konsolidasi v27. Untuk status canonical terbaru gunakan `README.md`, `HANDOVER.md`, dan dokumen handover utama di `docs/README.md`. Jangan menganggap versi/build/deploy di dokumen ini sebagai status final saat ini.
+
 # Validasi model
 
 Tanggal validasi ulang: 1 Agustus 2026.
@@ -34,7 +36,7 @@ Mismatch awal berhasil ditelusuri ke rectangular inference PyTorch sementara
 ONNX fixed-square. Runtime kini memakai `rect=False` secara eksplisit; threshold,
 shape, class mapping, dan postprocessing tidak diubah untuk menutupi masalah.
 
-Latency per frame pada MacBook Air M1, sehingga bukan benchmark Manifold:
+Latency per frame pada host lokal historis, sehingga bukan benchmark Manifold:
 
 | Model/backend | Frame 0 | Frame 15 | Frame 30 |
 |---|---:|---:|---:|

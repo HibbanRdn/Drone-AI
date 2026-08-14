@@ -1,0 +1,43 @@
+{
+  "blocker_id": "V26-SOFTWARE-BLOCKER-001",
+  "title": "analyze_gaps gap-coordinate back-projection error",
+  "file": "/home/dji/drone_ai_dev/vnext-v26/source/src/gap_plot_ai/finalizer.py",
+  "function": "analyze_gaps",
+  "lines": "482-484 (rc = row_centers[ri]; exp_lx = cx + exp_along*cos_a - (rc-cy)*sin_a; exp_ly = cy + exp_along*sin_a + (rc-cy)*cos_a)",
+  "bug": "uses (rc - cy) where rc is the row center in ACROSS units; correct inverse rotation requires rc (image: y = cy + along*sin + rc*cos)",
+  "expected": {
+    "local_x": 520,
+    "local_y": 100
+  },
+  "reproduced": {
+    "registration": "accepted (both edges)",
+    "plants": 49,
+    "gap_count": 1,
+    "gap_evaluated": true,
+    "orientation_deg": 179.0,
+    "cx_px": 477.53,
+    "cy_px": 167.38,
+    "row_centers_across_units": [
+      -108.49,
+      -52.69,
+      6.95,
+      66.97
+    ],
+    "along_spacing_px": 39.99,
+    "cross_spacing_px": 59.99,
+    "row_id": 3,
+    "rc_across": 66.97,
+    "slot_along_px": -43.61,
+    "v26_output_x": 522.89,
+    "v26_output_y": 267.01,
+    "recomputed_buggy_x": 522.89,
+    "recomputed_buggy_y": 267.01,
+    "correct_x": 519.97,
+    "correct_y": 99.66,
+    "err_buggy_px": 167.04,
+    "err_correct_px": 0.34
+  },
+  "impact": "Gap COUNT and slot selection are correct; gap POSITIONS are systematically displaced by cy (mean-y of plant set) along the across axis. Real sessions with hundreds of plants: cy can be thousands of px -> gaps can be placed on the wrong row or outside the field in local GeoJSON/SHP. Affects gap outputs only; runtime/aircraft safety not affected.",
+  "status": "BLOCKER_CONFIRMED_NO_PATCH_APPLIED",
+  "timestamp": "2026-08-12T10:52:03.829468+00:00"
+}

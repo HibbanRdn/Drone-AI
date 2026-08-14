@@ -33,7 +33,7 @@ models:
     engine_path: models/engine/plant_center_manual_v1_b0_tensorrt-8.5.2_cuda-11.4_aarch64_fp16.engine
     task: detect
     image_size: 1024
-    confidence_threshold: 0.2
+    confidence_threshold: 0.20
     nms_iou_threshold: 0.1
     max_detections: 1000
     tiled: true

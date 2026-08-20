@@ -2,6 +2,8 @@
 
 Panduan ini disusun dari source canonical dan evidence snapshot. Panduan ini tidak menggantikan dokumentasi DJI atau prosedur safety operator.
 
+Untuk setup firmware, konektivitas, dan inventory awal gunakan [Initial Setup](INITIAL_SETUP.md). Untuk lifecycle package gunakan [Build dan Deployment](BUILD_DEPLOYMENT.md).
+
 ## Prinsip Pertama
 
 Selalu pastikan versi yang sedang dibahas:
@@ -118,6 +120,8 @@ Periksa:
 
 Known issue: launcher dan native spawn tidak boleh sama-sama menjalankan worker. Pilih satu path sebelum packaging v27.
 
+Jika terdapat dua PID worker, hentikan test secara terkontrol dan review `scripts/dpk_launcher.sh` serta `SpawnPythonWorker()`; jangan mengandalkan file IPC untuk menentukan worker yang benar.
+
 ## TensorRT Engine Gagal Load
 
 Path engine pada Manifold:
@@ -135,6 +139,8 @@ Periksa:
 - CUDA 11.4 tersedia;
 - engine dibuat untuk TensorRT/CUDA/aarch64 yang kompatibel;
 - `config/live.yaml` menunjuk path engine yang benar.
+
+Periksa juga apakah file yang dipilih adalah raw TensorRT engine. `scripts/build_engine.py` dapat menghasilkan artifact ber-metadata dan sibling `.raw.engine`; backend runtime mendeserialisasi byte TensorRT secara langsung. Lihat [Model Deployment](MODEL_DEPLOYMENT.md) untuk pemeriksaan artifact dan rollback.
 
 Jangan memakai engine yang dibuat pada macOS, Windows x86, GPU lain, CUDA lain, atau TensorRT lain.
 
@@ -181,6 +187,8 @@ Periksa:
 
 Known issue: `RegistrationFrameWriter` perlu review karena writer di-reset ke `None` pada source v27.
 
+Selain itu, writer menargetkan `frames/registration`, sedangkan finalizer mencari `frames/processed`. Jika registration count nol, audit producer/consumer path ini sebelum menurunkan threshold atau mengubah algoritma registration.
+
 ## Gap Coordinate Salah
 
 Pertama tentukan versi:
@@ -208,6 +216,18 @@ Periksa:
 - builder resmi PSDK dipakai.
 
 Jangan membuat DPK v27 sebelum version drift dan startup path selesai direview.
+
+Gunakan `dji_app_ctl install -i <file.dpk>` untuk install aplikasi via CLI. PSDK `install.py` adalah helper dependency rootless dan bukan pengganti installer DPK. Untuk lifecycle mendekati production, install melalui DJI Pilot 2 **Manifold 3 > Application Management** dan verifikasi ulang start/stop/log.
+
+## Firmware / Koneksi Manifold
+
+Jika Manifold tidak terlihat dari komputer:
+
+- pastikan Manifold terpasang pada aircraft dan komputer terhubung ke debug port aircraft; USB-C Manifold bukan koneksi data langsung ke komputer;
+- gunakan Windows untuk DJI Assistant 2 Enterprise dan firmware update Manifold;
+- verifikasi IP/route sebelum SSH ke `192.168.42.120`;
+- jangan memutus aircraft, RC, Manifold, atau daya selama firmware update;
+- periksa urutan compatibility pada [Initial Setup](INITIAL_SETUP.md).
 
 ## DJI Developer / Binding
 

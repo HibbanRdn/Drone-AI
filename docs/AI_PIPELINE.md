@@ -14,6 +14,8 @@ training artifact
 
 Repository ini menyimpan `.pt` dan `.onnx` melalui Git LFS. TensorRT `.engine` tidak disimpan sebagai binary karena artifact tersebut target-specific terhadap GPU, CUDA, TensorRT, dan arsitektur.
 
+Prosedur export, build, verifikasi binding, aktivasi, dan rollback dijelaskan di [Model Deployment](MODEL_DEPLOYMENT.md).
+
 ## Engine Runtime Manifold
 
 Path berikut adalah path pada Manifold:
@@ -72,6 +74,8 @@ Flow preprocessing dan postprocessing:
 
 Jika `models.detector.tiled` aktif, `InferenceRuntime` memakai `predict_tiled_detector()` dari `src/gap_plot_ai/tiling.py`. Frame dipecah menjadi tile 1024 px dengan overlap, prediksi tile dikonversi kembali ke koordinat global, lalu digabung dengan global NMS.
 
+Config canonical menggunakan tile 1024 dengan overlap 128. Threshold confidence, IoU NMS, dan batas detection tetap berasal dari `config/live.yaml`; jangan memindahkan nilai tersebut ke model tanpa mengubah kontrak postprocessing secara sadar.
+
 ## Segmenter
 
 Tujuan segmenter:
@@ -109,6 +113,8 @@ Flow:
 
 Segmenter aktif pada config v27. Runtime dapat memakai ulang segmentation terakhir melalui `runtime.reuse_last_segmentation` dan interval `models.segmenter.interval_frames`.
 
+Config canonical menjalankan segmenter setiap 5 frame dan memakai cache antar frame. Mask segmenter menjadi ROI/filter untuk pemrosesan tanaman; output gap tidak dihasilkan langsung oleh model segmenter.
+
 ## Scheduling Dan Cache
 
 Config penting:
@@ -128,7 +134,7 @@ Native C++ hanya mempertahankan latest frame. Jika frame masuk lebih cepat dari 
 
 Output per frame ditulis melalui `SessionWriter`. Ketika Stop AI, `InferenceRuntime.stop()` memanggil `finalize_session()` untuk menggabungkan detection antar frame menjadi unique plant dan gap result.
 
-Known issue: capture registration keyframe perlu direview karena `RegistrationFrameWriter` pada v27 dibuat lalu di-reset ke `None` di `worker.py`.
+Known issue: capture registration keyframe perlu direview karena `RegistrationFrameWriter` pada v27 dibuat lalu di-reset ke `None` di `worker.py`. Writer menargetkan `frames/registration`, sedangkan finalizer mencari frame pada `frames/processed`; kontrak producer/consumer ini belum tersambung secara terbukti.
 
 ## Finalizer Dan Gap Analysis
 
@@ -182,7 +188,7 @@ results/previews/*
 
 ## Status Geospatial
 
-`src/gap_plot_ai/geospatial_v2.py` menyediakan utilitas WGS84/UTM dan transform. Namun evidence snapshot menunjukkan output finalizer tertentu masih diberi label local-pixel mapping. Karena itu, true GIS/geographic export harus dianggap partially resolved sampai divalidasi end-to-end dengan data RTK/field.
+`src/gap_plot_ai/geospatial_v2.py` menyediakan utilitas WGS84/UTM dan transform, tetapi `finalizer.py` belum mengintegrasikan seluruh helper tersebut ke output final. Evidence menunjukkan output `geographic` tertentu masih membawa local-pixel coordinate dan `mapping=local_pixel_only`. Writer SHP juga dapat memasang deklarasi WGS84 pada koordinat yang masih pixel lokal. Karena itu, output tersebut tidak boleh dipakai sebagai GIS ground truth sampai pipeline RTK/transform divalidasi end-to-end.
 
 ## Cara Memperoleh Engine
 
@@ -205,3 +211,5 @@ DJI Manifold 3 / NVIDIA Orin NX
 ```
 
 Jangan melakukan conversion engine di macOS/Windows/x86/unrelated GPU untuk kemudian dianggap valid pada Manifold.
+
+Nama engine historis pada device (`*_best_fp16.engine`) berbeda dari pola nama output canonical (`*_tensorrt-8.5.2_cuda-11.4_aarch64_fp16.engine`). Selain itu, `scripts/build_engine.py` menghasilkan artifact ber-metadata dan sibling `.raw.engine`, sementara backend runtime melakukan deserialisasi TensorRT langsung. Developer harus menentukan artifact yang benar-benar raw/deserializable, memverifikasi hash dan binding, lalu mengubah config secara eksplisit. Jangan hanya rename file.

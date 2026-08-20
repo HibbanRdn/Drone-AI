@@ -2,6 +2,8 @@
 
 Dokumen ini menjelaskan arsitektur aplikasi berdasarkan source canonical v27 di repository ini.
 
+Untuk penelusuran function dan API secara berurutan, lanjutkan ke [Code Walkthrough](CODE_WALKTHROUGH.md).
+
 ## Flow Sistem
 
 ```mermaid
@@ -48,6 +50,8 @@ Tanggung jawab native app:
 - menulis frame terbaru ke IPC melalui `FrameSpoolThread()`;
 - membaca hasil worker dari `latest_result.txt`;
 - mengirim bounding box ke DJI Pilot melalui `DjiLiveview_SendAiMetaToPilot()`.
+
+Urutan startup saat ini perlu direview: native memanggil `SpawnPythonWorker()` sebelum PSDK init, sedangkan DPK launcher juga memulai worker. `DjiCore_ApplicationStart()` dipanggil sebelum telemetry dan liveview diinisialisasi. Ini didokumentasikan sebagai risiko lifecycle, bukan perubahan behavior pada handover.
 
 Function penting:
 
@@ -121,7 +125,7 @@ Flow `run()`:
 8. menulis `latest_result.txt`;
 9. ketika Stop AI, memanggil `runtime.stop()`.
 
-Known issue: pada source v27, `RegistrationFrameWriter` dibuat ketika session start tetapi segera di-reset ke `None`. Perilaku ini perlu direview sebelum mengandalkan registration frame untuk finalizer.
+Known issue: pada source v27, `RegistrationFrameWriter` dibuat ketika session start tetapi segera di-reset ke `None`. Writer menargetkan `frames/registration`, sementara finalizer membaca `frames/processed`. Perilaku ini perlu direview sebelum mengandalkan registration untuk finalizer.
 
 ## InferenceRuntime
 
@@ -194,4 +198,4 @@ Path berikut adalah path target pada Manifold, bukan path laptop developer:
 
 ## Batasan Saat Ini
 
-Runtime ini tidak melakukan flight control, waypoint control, joystick control, atau aircraft movement. Source v27 memiliki widget untuk gimbal, tetapi prosedur dan validasinya tetap perlu diuji pada hardware sebelum dipakai operasional.
+Runtime ini tidak melakukan flight control, waypoint control, joystick control, atau aircraft movement. Source v27 memiliki widget untuk gimbal, tetapi prosedur dan validasinya tetap perlu diuji pada hardware sebelum dipakai operasional. Output bernama `geographic`/SHP saat ini juga belum menjamin koordinat geografis yang valid; lihat [AI Pipeline](AI_PIPELINE.md).

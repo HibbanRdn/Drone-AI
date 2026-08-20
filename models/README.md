@@ -10,6 +10,8 @@ git lfs pull
 python3 scripts/model_preflight.py
 ```
 
+Panduan lengkap ada di [Model Deployment](../docs/MODEL_DEPLOYMENT.md). Jangan melakukan conversion sebelum membaca compatibility dan artifact-format gate pada dokumen tersebut.
+
 ## Struktur
 
 | Folder/file | Isi |
@@ -40,4 +42,6 @@ Binary engine tersebut tidak dimasukkan ke Git. Path, ukuran, dan hash dicatat d
   -> config/live.yaml
 ```
 
-Jangan membuat engine di macOS, Windows, x86, atau GPU lain lalu menganggapnya valid untuk Manifold. Gunakan Manifold 3 atau environment Linux aarch64 dengan CUDA 11.4 dan TensorRT 8.5.2.2.
+Export ONNX portable dilakukan melalui `scripts/export_models.py`; build engine target dilakukan melalui `scripts/build_engine.py` pada Manifold. Script project mengekspor ONNX FP32, batch 1, opset 17, static shape, tanpa embedded NMS, kemudian membangun TensorRT FP16 static engine.
+
+Jangan membuat engine di macOS, Windows, x86, atau GPU lain lalu menganggapnya valid untuk Manifold. Gunakan Manifold 3 atau environment Linux aarch64 yang kompatibel. Setelah build, verifikasi raw/deserializable artifact, binding, hash, dan hasil parity sebelum mengaktifkannya di `config/live.yaml`.

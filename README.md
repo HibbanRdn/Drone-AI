@@ -73,22 +73,26 @@ Runtime Manifold yang terdokumentasi memakai engine eksternal pada device:
 /home/dji/gap_plot_ai_assets/models/engine/plot_segmenter_b4_selected_best_fp16.engine
 ```
 
-Detail model ada di [docs/AI_PIPELINE.md](docs/AI_PIPELINE.md) dan [models/README.md](models/README.md).
+Detail model ada di [docs/AI_PIPELINE.md](docs/AI_PIPELINE.md), [docs/MODEL_DEPLOYMENT.md](docs/MODEL_DEPLOYMENT.md), dan [models/README.md](models/README.md).
 
 ## Baca Selanjutnya
 
 Urutan baca untuk developer berikutnya:
 
 1. [HANDOVER.md](HANDOVER.md)
-2. [docs/README.md](docs/README.md)
+2. [docs/INITIAL_SETUP.md](docs/INITIAL_SETUP.md)
 3. [docs/SOURCE_PROVENANCE.md](docs/SOURCE_PROVENANCE.md)
 4. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-5. [docs/AI_PIPELINE.md](docs/AI_PIPELINE.md)
-6. [docs/BUILD_DEPLOYMENT.md](docs/BUILD_DEPLOYMENT.md)
-7. [docs/VALIDATION_EVIDENCE.md](docs/VALIDATION_EVIDENCE.md)
-8. [docs/KNOWN_ISSUES_AND_BLOCKERS.md](docs/KNOWN_ISSUES_AND_BLOCKERS.md)
-9. [docs/TROUBLESHOOTING_MANIFOLD.md](docs/TROUBLESHOOTING_MANIFOLD.md)
-10. [docs/NEXT_DEVELOPER_ROADMAP.md](docs/NEXT_DEVELOPER_ROADMAP.md)
+5. [docs/CODE_WALKTHROUGH.md](docs/CODE_WALKTHROUGH.md)
+6. [docs/AI_PIPELINE.md](docs/AI_PIPELINE.md)
+7. [docs/MODEL_DEPLOYMENT.md](docs/MODEL_DEPLOYMENT.md)
+8. [docs/BUILD_DEPLOYMENT.md](docs/BUILD_DEPLOYMENT.md)
+9. [docs/VALIDATION_EVIDENCE.md](docs/VALIDATION_EVIDENCE.md)
+10. [docs/KNOWN_ISSUES_AND_BLOCKERS.md](docs/KNOWN_ISSUES_AND_BLOCKERS.md)
+11. [docs/TROUBLESHOOTING_MANIFOLD.md](docs/TROUBLESHOOTING_MANIFOLD.md)
+12. [docs/NEXT_DEVELOPER_ROADMAP.md](docs/NEXT_DEVELOPER_ROADMAP.md)
+
+Indeks seluruh dokumen canonical dan historis tersedia di [docs/README.md](docs/README.md).
 
 ## Safety
 

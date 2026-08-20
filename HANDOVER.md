@@ -89,6 +89,7 @@ Runtime yang terakhir benar-benar terinstall masih v26.
 - Version/build metadata perlu direkonsiliasi sebelum v27 packaging.
 - Startup path worker perlu dipastikan satu arah: launcher atau native spawn.
 - `RegistrationFrameWriter` pada v27 perlu review karena writer dibuat lalu di-reset ke `None`.
+- Artifact engine hasil `scripts/build_engine.py` perlu direkonsiliasi dengan nama dan format yang dibaca runtime.
 - Geospatial output masih perlu validasi end-to-end; beberapa output snapshot masih bersifat local-pixel.
 - Field validation, RTK/geospatial validation, Pilot overlay long-run validation, dan gap precision/recall masih open.
 
@@ -111,12 +112,12 @@ Jangan mulai dari installed runtime mirror, staging lama, folder forensic, atau 
 
 ## Developer Berikutnya Mulai Dari Mana
 
-1. Baca [docs/SOURCE_PROVENANCE.md](docs/SOURCE_PROVENANCE.md).
-2. Baca [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-3. Baca [docs/AI_PIPELINE.md](docs/AI_PIPELINE.md).
-4. Review source canonical di `src/` dan config di `config/`.
-5. Reconcile metadata versi/build seperti dijelaskan di [docs/BUILD_DEPLOYMENT.md](docs/BUILD_DEPLOYMENT.md).
-6. Review issue di [docs/KNOWN_ISSUES_AND_BLOCKERS.md](docs/KNOWN_ISSUES_AND_BLOCKERS.md).
-7. Ikuti roadmap di [docs/NEXT_DEVELOPER_ROADMAP.md](docs/NEXT_DEVELOPER_ROADMAP.md).
+1. Siapkan dan cocokkan hardware/software melalui [docs/INITIAL_SETUP.md](docs/INITIAL_SETUP.md).
+2. Baca [docs/SOURCE_PROVENANCE.md](docs/SOURCE_PROVENANCE.md) dan [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+3. Ikuti alur source di [docs/CODE_WALKTHROUGH.md](docs/CODE_WALKTHROUGH.md).
+4. Pahami model melalui [docs/AI_PIPELINE.md](docs/AI_PIPELINE.md) dan [docs/MODEL_DEPLOYMENT.md](docs/MODEL_DEPLOYMENT.md).
+5. Review source canonical di `src/` dan config di `config/`.
+6. Reconcile issue startup, registration, engine, dan metadata versi sebelum mengikuti [docs/BUILD_DEPLOYMENT.md](docs/BUILD_DEPLOYMENT.md).
+7. Review [docs/KNOWN_ISSUES_AND_BLOCKERS.md](docs/KNOWN_ISSUES_AND_BLOCKERS.md) dan ikuti [docs/NEXT_DEVELOPER_ROADMAP.md](docs/NEXT_DEVELOPER_ROADMAP.md).
 
 Prioritas berikutnya adalah correctness dan provenance build, bukan feature baru atau optimasi.

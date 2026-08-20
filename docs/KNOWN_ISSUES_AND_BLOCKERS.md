@@ -124,6 +124,36 @@ OPEN
 
 Source memiliki `scripts/dpk_launcher.sh` dan native `SpawnPythonWorker()`. v26 staging historis memakai direct native binary. Developer berikutnya perlu memilih satu startup path sebelum packaging v27.
 
+### PSDK application lifecycle ordering
+
+Status:
+
+```text
+OPEN
+```
+
+`src/psdk/main.cpp` memanggil `DjiCore_ApplicationStart()` sebelum `InitTelemetry()` dan `StartLiveview()`. Dokumentasi PSDK menempatkan application start setelah module init/register. Urutan project perlu direview pada PSDK 3.16.0 dan diuji di hardware; handover tidak mengubahnya tanpa runtime evidence.
+
+### Engine artifact dan config reconciliation
+
+Status:
+
+```text
+OPEN
+```
+
+Nama engine historis pada Manifold berbeda dari pola nama output script canonical. `scripts/build_engine.py` juga menghasilkan artifact ber-metadata dan sibling `.raw.engine`, sedangkan backend melakukan TensorRT deserialization langsung. Artifact yang dipilih harus diverifikasi raw/deserializable, hash, binding, parity, dan config path-nya sebelum v27 runtime test.
+
+### Registration producer/consumer path
+
+Status:
+
+```text
+OPEN
+```
+
+Selain writer di-reset ke `None`, `RegistrationFrameWriter` menargetkan `frames/registration` sedangkan finalizer membaca `frames/processed`. Ownership dan kontrak direktori harus direkonsiliasi sebelum registration dianggap aktif.
+
 ### Field validation
 
 Status:

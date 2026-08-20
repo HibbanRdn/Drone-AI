@@ -100,6 +100,19 @@ Repository ini sengaja tidak menyimpan folder seperti `source-final`, `v27-final
 - evidence terkurasi di `docs/evidence/`;
 - dokumentasi build/deployment dan known issues.
 
+### Hasil comparison canonical versus raw v27
+
+Audit final membandingkan seluruh `src/gap_plot_ai/`, `src/psdk/main.cpp`, dan config raw v27 terhadap repository:
+
+| Kategori | Hasil |
+|---|---|
+| **IDENTICAL** | 23 file source/config raw v27 byte-identical dengan canonical |
+| **EXPECTED DIFFERENCE** | `finalizer.py`, `geospatial_v2.py`, `registration_writer.py`, `runtime.py`, dan `main.cpp` hanya berbeda pada trailing whitespace |
+| **REPOSITORY-SPECIFIC** | Widget ditempatkan di `config/widget/` dan byte-identical dengan working build tree Manifold; template credential, example config, scripts, test, packaging, dan dokumentasi dipertahankan dari repository |
+| **POTENTIAL PROBLEM** | Tidak ada kehilangan atau perubahan algoritma yang ditemukan pada comparison final |
+
+Hash raw v27 tetap dicatat di atas. Normalisasi trailing whitespace tidak mengubah behavior runtime atau fix Blocker-001.
+
 ## Aturan Interpretasi
 
 | Pertanyaan | Jawaban |

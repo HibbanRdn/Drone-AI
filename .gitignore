@@ -30,6 +30,7 @@ compile_commands.json
 dpk/build/
 dpk/staging/
 dpk/*.dpk
+*.engine
 
 # Runtime state and generated application data
 /runtime/
@@ -49,6 +50,7 @@ dpk/*.dpk
 datasets/raw/
 datasets/downloads/
 outputs/
+handover_snapshot*/
 *.rgb
 *.MP4
 *.mp4
